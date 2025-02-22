@@ -33,7 +33,9 @@ pip install git+https://github.com/asomoza/image_gen_aux.git
     pip install -r requirements.txt
     ```
 
-4. Manually download the SpatialTracker checkpoint to `checkpoints/`, from [Google Drive](https://drive.google.com/drive/folders/1UtzUJLPhJdUg2XvemXXz1oe6KUQKVjsZ).  Official checkpoint can be found at: https://huggingface.co/EXCAI/Diffusion-As-Shader
+4. Manually download these checkpoints:
+   - SpatialTracker checkpoint: [Google Drive](https://drive.google.com/drive/folders/1UtzUJLPhJdUg2XvemXXz1oe6KUQKVjsZ) and move it to `checkpoints/`.
+   - Our *Diffusion as Shader* checkpoint: https://huggingface.co/EXCAI/Diffusion-As-Shader
 
 <!-- 5. Manually download the ZoeDepth checkpoints (dpt_beit_large_384.pt, ZoeD_M12_K.pt, ZoeD_M12_NK.pt) to `models/monoD/zoeDepth/ckpts/`. For more information, refer to [this issue](https://github.com/henry123-boy/SpaTracker/issues/20). -->
 
@@ -56,6 +58,7 @@ The inference code was tested on
 - 1 NVIDIA H800 with CUDA version 11.8. (32GB GPU memory is sufficient for generating videos with our code.)
 
 We provide a inference script for our tasks. You can run the `demo.py` script directly as follows.
+**We also provide a validation dataset in [Google Drive](https://drive.google.com/file/d/1pVB_2AEoz1v4vXWe6-pdDAEQdmlGEIci/view?usp=sharing) for our 4 tasks. You can run the `scripts/evaluate_DaS.sh` to evaluate the performance of our model.**
 
 
 #### 1. Motion Transfer 
