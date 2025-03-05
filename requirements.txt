@@ -27,6 +27,7 @@ imageio-ffmpeg>=0.5.1
 numpy>=1.26.4
 git+https://github.com/asomoza/image_gen_aux.git
 deepspeed
+gradio
 
 # submodules
 -r submodules/MoGe/requirements.txt
