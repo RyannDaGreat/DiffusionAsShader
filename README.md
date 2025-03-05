@@ -1,6 +1,6 @@
 # Diffusion as Shader: 3D-aware Video Diffusion for Versatile Video Generation Control
 
-## [Project page](https://igl-hkust.github.io/das/) | [Paper](https://arxiv.org/abs/2501.03847)
+## [Project page](https://igl-hkust.github.io/das/) | [Paper](https://arxiv.org/abs/2501.03847) | [HuggingFace Spaces](https://img.shields.io/badge/🤗%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/EXCAI/Diffusion-As-Shader)
 
 ![teaser](assets/teaser.gif)
 
