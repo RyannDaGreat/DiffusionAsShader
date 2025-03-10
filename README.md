@@ -84,6 +84,20 @@ python demo.py \
 ```
 
 #### 2. Camera Control
+
+<table border="1">
+<tr>
+  <th>Pans Right + Zoom out</th>
+  <th>Pans Left + Zoom out</th>
+  <th>Pans Up + Zoom out</th>
+</tr>
+<tr>
+  <td><img src="assets/videos/panright+out.mp4" alt="Pans Right + Zoom out"></td>
+  <td><img src="assets/videos/panleft+out.mp4" alt="Pans Left + Zoom out"></td>
+  <td><img src="assets/videos/panup+out.mp4" alt="Pans Up + Zoom out"></td>
+</tr>
+</table>
+
 We provide several template camera motion types, you can choose one of them. In practice, we find that providing a description of the camera motion in prompt will get better results.
 ```python
 python demo.py \
@@ -150,6 +164,14 @@ Or you can create your own object motion and camera motion as follows and replac
 It should be noted that depending on the tracker you choose, you may need to modify the scale of translation.
 
 #### 4. Animating meshes to video
+
+<table border="1">
+<tr>
+  <td><img src="assets/videos/m2v1.mp4" alt="video 1"></td>
+  <td><img src="assets/videos/m2v2.mp4" alt="video 2"></td>
+</tr>
+</table>
+
 We only support using Blender (version > 4.0) to generate the tracking video now. Before running the following command, you need to install Blender and run the script `scripts/blender.py` in your blender project and generate the tracking video for your blender project. Then you need to provide the tracking video path to the `tracking_path` argument:
 
 ```python
