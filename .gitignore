@@ -190,7 +190,6 @@ checkpoints
 **/*/.mp4
 **/*/.npy
 
-/assets/**
 ./vis_results/** */
 models/monoD/zoeDepth/ckpts/*
 slurm-*.out
