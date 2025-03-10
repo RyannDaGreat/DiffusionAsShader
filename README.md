@@ -92,9 +92,9 @@ python demo.py \
   <th>Pans Up + Zoom out</th>
 </tr>
 <tr>
-  <td><img src="assets/videos/panright+out.mp4" alt="Pans Right + Zoom out"></td>
-  <td><img src="assets/videos/panleft+out.mp4" alt="Pans Left + Zoom out"></td>
-  <td><img src="assets/videos/panup+out.mp4" alt="Pans Up + Zoom out"></td>
+  <td><video src="assets/videos/panright+out.mp4" alt="Pans Right + Zoom out"></td>
+  <td><video src="assets/videos/panleft+out.mp4" alt="Pans Left + Zoom out"></td>
+  <td><video src="assets/videos/panup+out.mp4" alt="Pans Up + Zoom out"></td>
 </tr>
 </table>
 
@@ -167,8 +167,8 @@ It should be noted that depending on the tracker you choose, you may need to mod
 
 <table border="1">
 <tr>
-  <td><img src="assets/videos/m2v1.mp4" alt="video 1"></td>
-  <td><img src="assets/videos/m2v2.mp4" alt="video 2"></td>
+  <td><video src="assets/videos/m2v1.mp4" alt="video 1"></td>
+  <td><video src="assets/videos/m2v2.mp4" alt="video 2"></td>
 </tr>
 </table>
 
