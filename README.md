@@ -87,9 +87,9 @@ python demo.py \
 
 <table border="1">
 <tr>
-  <th>Pans Right + Zoom out</th>
-  <th>Pans Left + Zoom out</th>
-  <th>Pans Up + Zoom out</th>
+  <th>Arc Right + Zoom out</th>
+  <th>Arc Left + Zoom out</th>
+  <th>Arc Up + Zoom out</th>
 </tr>
 <tr>
   <td><img src="assets/videos/panright+out.gif" alt="Pans Right + Zoom out"></td>
