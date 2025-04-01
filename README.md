@@ -33,8 +33,16 @@ pip install git+https://github.com/asomoza/image_gen_aux.git
 
 3. Make sure the submodule and requirements are installed:
     ```
+    mkdir -p submodules
     git submodule update --init --recursive
     pip install -r requirements.txt
+    ```
+    If the submodules are not installed, you need to manually download them and move them to `submodules/`. Run the following commands to install the submodules:
+    ```
+    # MoGe
+    git clone https://github.com/microsoft/MoGe.git submodules/MoGe
+    # VGGT
+    git clone https://github.com/facebookresearch/vggt.git submodules/vggt
     ```
 
 4. Manually download these checkpoints:
@@ -116,7 +124,7 @@ python demo.py \
     --output_dir <output_dir> \ # output directory
     --input_path <input_path> \ # the reference image or video path
     --camera_motion <camera_motion> \ # the camera motion type, see examples below
-    --tracking_method <tracking_method> \ # the tracking method (moge, spatracker). For image input, 'moge' is necessary.
+    --tracking_method <tracking_method> \ # the tracking method (moge, spatracker, cotracker). For image input, 'moge' is necessary.
     --gpu <gpu_id> \ # the gpu id
 ```
 
@@ -345,6 +353,7 @@ This project builds upon several excellent open source projects:
 
 * [MoGe](https://github.com/microsoft/MoGe) - Microsoft's monocular geometry estimation model that helps achieve more accurate 3D reconstruction.
 
+* [vggt](https://github.com/facebookresearch/vggt) - Facebook's video generation model that provides the foundational architecture for this project.
 We thank the authors and contributors of these projects for their valuable contributions to the open source community!
 
 ## Citation

@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
     sys.path.append(os.path.join(project_root, "submodules/MoGe"))
+    sys.path.append(os.path.join(project_root, "submodules/vggt"))
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 except:
     print("Warning: MoGe not found, motion transfer will not be applied")
@@ -21,7 +22,7 @@ from models.spatracker.predictor import SpaTrackerPredictor
 from models.spatracker.utils.visualizer import Visualizer
 from models.cogvideox_tracking import CogVideoXImageToVideoPipelineTracking
 
-from submodules.MoGe.moge.model import MoGeModel
+from submodules.MoGe.moge.model.v1 import MoGeModel
 
 from image_gen_aux import DepthPreprocessor
 from moviepy.editor import ImageSequenceClip
