@@ -125,26 +125,33 @@ python demo.py \
     --input_path <input_path> \ # the reference image or video path
     --camera_motion <camera_motion> \ # the camera motion type, see examples below
     --tracking_method <tracking_method> \ # the tracking method (moge, spatracker, cotracker). For image input, 'moge' is necessary.
+    --override_extrinsics <override/append> \ # how to apply camera motion: "override" to replace original camera, "append" to build upon it
     --gpu <gpu_id> \ # the gpu id
 ```
 
 Here are some tips for camera motion:
 - trans: translation motion, the camera will move in the direction of the vector (dx, dy, dz) with range [-1, 1]
-  - e.g., 'trans 0.1 0.1 0.1' moving left, up and zoom out
-  - e.g., 'trans 0.1 0.0 0.0 5 45' moving left from frame 5 to 45
+  - Positive X: Move right, Negative X: Move left
+  - Positive Y: Move down, Negative Y: Move up
+  - Positive Z: Zoom in, Negative Z: Zoom out
+  - e.g., 'trans -0.1 -0.1 -0.1' moving left, down and zoom in
+  - e.g., 'trans -0.1 0.0 0.0 5 45' moving left 0.1 from frame 5 to 45
 - rot: rotation motion, the camera will rotate around the axis (x, y, z) by the angle
-  - e.g., 'rot y 25' rotating 25 degrees around y-axis
-  - e.g., 'rot x -30 10 40' rotating -30 degrees around x-axis from frame 10 to 40
+  - X-axis rotation: positive X: pitch down, negative X: pitch up
+  - Y-axis rotation: positive Y: yaw left, negative Y: yaw right
+  - Z-axis rotation: positive Z: roll counter-clockwise, negative Z: roll clockwise
+  - e.g., 'rot y 25' rotating 25 degrees around y-axis (yaw left)
+  - e.g., 'rot x -30 10 40' rotating -30 degrees around x-axis (pitch up) from frame 10 to 40
 - spiral: spiral motion, the camera will move in a spiral path with the given radius
   - e.g., 'spiral 2' spiral motion with radius 2
   - e.g., 'spiral 2 15 35' spiral motion with radius 2 from frame 15 to 35
 
 Multiple transformations can be combined using semicolon (;) as separator:
-- e.g., "trans 0 0 0.5 0 30; rot x 25 0 30; trans 0.1 0 0 30 48"
+- e.g., "trans 0 0 -0.5 0 30; rot x -25 0 30; trans -0.1 0 0 30 48"
   This will:
-  1. Zoom out (z+0.5) from frame 0 to 30
-  2. Rotate 25 degrees around x-axis from frame 0 to 30
-  3. Move left (x+0.1) from frame 30 to 48
+  1. Zoom in (z-0.5) from frame 0 to 30
+  2. Pitch up (rotate -25 degrees around x-axis) from frame 0 to 30
+  3. Move left (x-0.1) from frame 30 to 48
 
 Notes:
 - Frame range is 0-48 (49 frames in total)
