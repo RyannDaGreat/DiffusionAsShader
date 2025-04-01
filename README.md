@@ -96,6 +96,16 @@ python demo.py \
   <td><img src="assets/videos/panleft+out.gif" alt="Pans Left + Zoom out"></td>
   <td><img src="assets/videos/panup+out.gif" alt="Pans Up + Zoom out"></td>
 </tr>
+<tr>
+  <th>Pans Right</th>
+  <th>Static</th>
+  <th>Zoom out</th>
+</tr>
+<tr>
+  <td><img src="assets/videos/car_panright.gif" alt="Pans Right"></td>
+  <td><img src="assets/videos/car_static.gif" alt="Static"></td>
+  <td><img src="assets/videos/car_zoomout.gif" alt="Zoom out"></td>
+</tr>
 </table>
 
 We provide several template camera motion types, you can choose one of them. In practice, we find that providing a description of the camera motion in prompt will get better results.
