@@ -16,3 +16,14 @@ huggingface-cli download EXCAI/Diffusion-As-Shader --local-dir diffusion_shader_
 echo "Checkpoints downloaded successfully!"
 echo "SpatialTracker checkpoint: ./checkpoints/"
 echo "Diffusion as Shader checkpoint: ./diffusion_shader_model/"
+
+echo ""
+echo "Pre-downloading additional inference models..."
+echo "Installing required packages..."
+pip install huggingface_hub torch -q
+
+# Run the Python script to download additional models
+python download_models.py
+
+echo ""
+echo "Setup complete!"
