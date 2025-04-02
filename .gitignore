@@ -220,3 +220,4 @@ tmp/
 *.DS_Store
 #<RP Default Gitignore End>
 
+diffusion_shader_model
