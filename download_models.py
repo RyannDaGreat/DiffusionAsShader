@@ -137,15 +137,89 @@ def download_inference_models():
         print(f"  - Warning: CoTracker download encountered an issue: {e}")
         print("    (The model may still be usable during inference)")
     
-    print("\n=== Download Summary ===")
-    print("1. SpatialTracker checkpoint: ./checkpoints/")
-    print("2. Diffusion as Shader model: ./diffusion_shader_model/")
-    print("3. Additional inference models:")
-    print(f"   - MoGe: {hf_cache}/models--Ruicheng--moge-vitl")
-    print(f"   - VGGT: {hf_cache}/models--facebook--VGGT-1B")
-    print(f"   - ZoeDepth: {hf_cache}/models--Intel--zoedepth-nyu-kitti")
-    print(f"   - CoTracker: {torch_cache}/hub/facebookresearch_co-tracker_main")
-    print("\nSetup complete! All models downloaded successfully.")
+    # Check if SpatialTracker model exists in diffusion_shader_model directory
+    spatracker_src = "diffusion_shader_model/spatracker/spaT_final.pth"
+    spatracker_dst = "checkpoints/spatracker_model.pth"
+    if os.path.exists(spatracker_src) and not os.path.exists(spatracker_dst):
+        print(f"\nFound SpatialTracker model at {spatracker_src}")
+        print(f"Copying to {spatracker_dst}...")
+        import shutil
+        os.makedirs(os.path.dirname(spatracker_dst), exist_ok=True)
+        shutil.copy2(spatracker_src, spatracker_dst)
+        print(f"Successfully copied SpatialTracker model to {spatracker_dst}")
+    
+    # Install rich for better table display
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "rich", "-q"])
+    from rich.console import Console
+    from rich.table import Table
+    
+    # Create a list of files to check
+    files_to_check = [
+        {"name": "SpatialTracker Model", "path": "checkpoints/spatracker_model.pth", "critical": True},
+        {"name": "Example Butterfly MP4", "path": "checkpoints/examples/butterfly_rgb/butterfly.mp4", "critical": False},
+        {"name": "Example Butterfly PNG", "path": "checkpoints/examples/butterfly_rgb/butterfly.png", "critical": False},
+        {"name": "Diffusion Shader Model - Config", "path": "diffusion_shader_model/model_index.json", "critical": True},
+        {"name": "Diffusion Shader - Scheduler", "path": "diffusion_shader_model/scheduler/scheduler_config.json", "critical": True},
+        {"name": "Diffusion Shader - Text Encoder", "path": "diffusion_shader_model/text_encoder/config.json", "critical": True},
+        {"name": "Diffusion Shader - Tokenizer", "path": "diffusion_shader_model/tokenizer/spiece.model", "critical": True},
+        {"name": "Diffusion Shader - Transformer", "path": "diffusion_shader_model/transformer/config.json", "critical": True},
+        {"name": "Diffusion Shader - VAE", "path": "diffusion_shader_model/vae/config.json", "critical": True}
+    ]
+    
+    # Add inference model checks
+    cache_paths = {
+        "MoGe": os.path.join(hf_cache, "hub/models--Ruicheng--moge-vitl"),
+        "VGGT": os.path.join(hf_cache, "hub/models--facebook--VGGT-1B"),
+        "ZoeDepth": os.path.join(hf_cache, "hub/models--Intel--zoedepth-nyu-kitti"),
+        "CoTracker": os.path.join(torch_cache, "hub/facebookresearch_co-tracker_main")
+    }
+    
+    for name, path in cache_paths.items():
+        files_to_check.append({"name": name, "path": path, "critical": False})
+    
+    # Check each file and build results
+    results = []
+    all_critical_present = True
+    
+    for file_info in files_to_check:
+        exists = os.path.exists(file_info["path"])
+        if file_info["critical"] and not exists:
+            all_critical_present = False
+        
+        results.append({
+            "name": file_info["name"],
+            "status": "✅ Present" if exists else "❌ Missing",
+            "critical": "Critical" if file_info["critical"] else "Optional",
+            "path": file_info["path"]
+        })
+    
+    console = Console()
+    table = Table(title="Diffusion as Shader - Model Status")
+    
+    table.add_column("Component", style="cyan")
+    table.add_column("Status", style="magenta")
+    table.add_column("Type", style="yellow")
+    table.add_column("Path", style="green")
+    
+    for result in results:
+        status_style = "green" if "Present" in result["status"] else "red"
+        critical_style = "red bold" if result["critical"] == "Critical" else "yellow"
+        
+        table.add_row(
+            result["name"],
+            f"[{status_style}]{result['status']}[/]",
+            f"[{critical_style}]{result['critical']}[/]",
+            result["path"]
+        )
+    
+    console.print("\n")
+    console.print(table)
+    
+    if all_critical_present:
+        console.print("\n[green bold]Setup complete! All critical models are present.[/]")
+    else:
+        console.print("\n[red bold]Setup incomplete! Some critical models are missing.[/]")
+        console.print("[yellow]Please check the table above and ensure all critical components are present.[/]")
 
 if __name__ == "__main__":
     main()
