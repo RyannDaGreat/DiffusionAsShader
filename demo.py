@@ -51,7 +51,11 @@ def load_media(media_path, max_frames=49, transform=None):
         
         # Case 1: Video longer than 6 seconds, sample first 6 seconds + 1 frame
         if duration > 6.0:
-            frames = load_video(media_path, max_frames=max_frames)
+            # Load video and manually sample frames to achieve max_frames
+            all_frames = load_video(media_path)
+            # Sample frames evenly to get max_frames
+            indices = np.linspace(0, len(all_frames) - 1, max_frames)
+            frames = [all_frames[int(i)] for i in indices]
             fps = max_frames-1 / 6.0
         # Cases 2 and 3: Video shorter than 6 seconds
         else:
