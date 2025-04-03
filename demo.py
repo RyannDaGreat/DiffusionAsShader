@@ -117,6 +117,8 @@ if __name__ == "__main__":
     parser.add_argument('--object_mask', type=str, default=None, help='Path to object mask image (binary image)')
     parser.add_argument('--tracking_method', type=str, default='spatracker', choices=['spatracker', 'moge', 'cotracker'], 
                     help='Tracking method to use (spatracker, cotracker or moge)')
+    parser.add_argument('--tracking_only', action='store_true', 
+                    help='Generate only the tracking video without diffusion')
     args = parser.parse_args()
     
     # Load input video/image
@@ -271,11 +273,53 @@ if __name__ == "__main__":
         else:
             _, tracking_tensor = das.visualize_tracking_spatracker(video_tensor, pred_tracks, pred_visibility, T_Firsts)
     
-    das.apply_tracking(
-        video_tensor=video_tensor,
-        fps=fps,
-        tracking_tensor=tracking_tensor,
-        img_cond_tensor=repaint_img_tensor,
-        prompt=args.prompt,
-        checkpoint_path=args.checkpoint_path
-    )
+    # Always save tracking data for later use
+    # Make sure output directory exists
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    # Get base filename without extension
+    input_file_name = os.path.splitext(os.path.basename(args.input_path))[0]
+    
+    # Create dictionary for tracking data using PyTorch tensors in 16-bit float
+    tracks_data = {}
+    
+    # All methods have tracks data - converted to float16 for efficiency
+    tracks_data["tracks"] = pred_tracks.detach().cpu().to(torch.float16)
+    
+    # Get dimensions
+    T, N, _ = tracks_data["tracks"].shape
+    assert tracks_data["tracks"].shape == (T, N, 3), f"Tracks shape: {tracks_data['tracks'].shape}, expected: ({T}, {N}, 3)"
+    
+    # Add additional data for non-moge methods
+    if args.tracking_method != "moge":
+        tracks_data["visibility"] = pred_visibility.detach().cpu().to(bool)
+        assert tracks_data["visibility"].shape == (T, N), f"Visibility shape: {tracks_data['visibility'].shape}, expected: ({T}, {N})"
+        
+        # Only spatracker has T_Firsts
+        # T_Firsts indicates which frame each point was first tracked in
+        # (e.g., T_Firsts==0 means the point was part of the initial query frame)
+        # T_Firsts is uint8 type and should stay as integer type
+        if args.tracking_method == "spatracker":
+            tracks_data["T_Firsts"] = t_firsts_cpu.detach().cpu().unsqueeze(0)
+            assert tracks_data["T_Firsts"].shape == (N,), f"T_Firsts shape: {tracks_data['T_Firsts'].shape}, expected: ({N},)"
+
+    # Save the tracks to a file
+    filename = f"{input_file_name}_tracks_{args.tracking_method}.pt"
+    torch.save(tracks_data, os.path.join(args.output_dir, filename))
+    
+    print(f"Tracking data saved to {args.output_dir}")
+    
+    # Determine whether to run diffusion based on tracking_only flag
+    if args.tracking_only:
+        print("Tracking only mode - skipping diffusion. Tracking video was saved to outputs/tracking_video.mp4")
+    else:
+        # Apply tracking and diffusion as normal
+        das.apply_tracking(
+            video_tensor=video_tensor,
+            fps=fps,
+            tracking_tensor=tracking_tensor,
+            img_cond_tensor=repaint_img_tensor,
+            prompt=args.prompt,
+            checkpoint_path=args.checkpoint_path
+        )
+
