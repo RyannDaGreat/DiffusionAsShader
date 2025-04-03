@@ -44,13 +44,37 @@ def main():
 
     # Step 1: Download SpatialTracker checkpoint from Google Drive
     print("\n=== Step 1: Downloading SpatialTracker checkpoint ===")
-    spatracker_folder_id = "1UtzUJLPhJdUg2XvemXXz1oe6KUQKVjsZ"
+    # Direct file download links for SpatialTracker model files
+    spatracker_files = [
+        # Main model file - this is the critical one
+        {"id": "1yCG6ztR2lB0bxrGIBgLmFeCx9YA9Znct", "output": "checkpoints/spatracker_model.pth"},
+        
+        # Example files that show successful download (optional)
+        {"id": "1BDtvfrvbzEFY84XJPp62Dq1PujIpbOK_", "output": "checkpoints/examples/butterfly_rgb/butterfly.mp4"},
+        {"id": "1hlAGFony7LzpLcEAoGLiNaY3zxfiN_bW", "output": "checkpoints/examples/butterfly_rgb/butterfly.png"}
+    ]
     try:
         import gdown
-        print(f"Downloading SpatialTracker from Google Drive to ./checkpoints/")
-        gdown.download_folder(id=spatracker_folder_id, output="checkpoints/", quiet=False)
+        # Create the example directories
+        os.makedirs("checkpoints/examples/butterfly_rgb", exist_ok=True)
+        
+        print(f"Downloading SpatialTracker model files to ./checkpoints/")
+        success = True
+        for file_info in spatracker_files:
+            try:
+                gdown.download(id=file_info["id"], output=file_info["output"], quiet=False)
+                print(f"Successfully downloaded {file_info['output']}")
+            except Exception as file_e:
+                print(f"Error downloading {file_info['output']}: {file_e}")
+                if "spatracker_model.pth" in file_info["output"]:
+                    success = False
+        
+        if not success:
+            print("\nError: Failed to download the critical model file.")
+            print("Please manually download from: https://drive.google.com/drive/folders/1UtzUJLPhJdUg2XvemXXz1oe6KUQKVjsZ")
+            print("You need the spatracker_model.pth file in your checkpoints/ directory.")
     except Exception as e:
-        print(f"Error downloading SpatialTracker: {e}")
+        print(f"Error setting up SpatialTracker download: {e}")
         print("You may need to manually download from: https://drive.google.com/drive/folders/1UtzUJLPhJdUg2XvemXXz1oe6KUQKVjsZ")
 
     # Step 2: Download Diffusion as Shader model from HuggingFace
