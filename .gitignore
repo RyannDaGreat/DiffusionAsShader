@@ -223,3 +223,4 @@ tmp/
 diffusion_shader_model
 .gradio
 node_modules
+package-lock.json
