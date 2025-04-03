@@ -222,3 +222,4 @@ tmp/
 
 diffusion_shader_model
 .gradio
+node_modules
