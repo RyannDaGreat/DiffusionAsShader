@@ -25,7 +25,12 @@ from models.cogvideox_tracking import CogVideoXImageToVideoPipelineTracking
 from submodules.MoGe.moge.model.v1 import MoGeModel
 
 from image_gen_aux import DepthPreprocessor
-from moviepy.editor import ImageSequenceClip
+
+try:
+    from moviepy.editor import ImageSequenceClip #Moviepy V1
+except ImportError:
+    from moviepy import ImageSequenceClip #Moviepy V2
+
 
 class DiffusionAsShaderPipeline:
     def __init__(self, gpu_id=0, output_dir='outputs'):
@@ -1272,3 +1277,4 @@ class ObjectMotionGenerator:
                 modified_tracks[frame_idx, points_in_mask] = transformed_points[:, :3]
             
             return modified_tracks
+

@@ -13,7 +13,12 @@ import flow_vis
 from matplotlib import cm
 import torch.nn.functional as F
 import torchvision.transforms as transforms
-from moviepy.editor import ImageSequenceClip
+
+try:
+    from moviepy.editor import ImageSequenceClip #Moviepy V1
+except ImportError:
+    from moviepy import ImageSequenceClip #Moviepy V2
+
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 

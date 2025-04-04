@@ -14,7 +14,12 @@ import torch
 import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
-from moviepy.editor import VideoFileClip
+
+try:
+    from moviepy.editor import ImageSequenceClip #Moviepy V1
+except ImportError:
+    from moviepy import ImageSequenceClip #Moviepy V2
+
 from diffusers.utils import load_image, load_video
 
 from models.pipelines import DiffusionAsShaderPipeline, FirstFrameRepainter, CameraMotionGenerator, ObjectMotionGenerator

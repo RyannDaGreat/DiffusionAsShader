@@ -11,7 +11,12 @@ import numpy as np
 from PIL import Image
 import cv2
 import argparse
-from moviepy.editor import ImageSequenceClip
+
+try:
+    from moviepy.editor import ImageSequenceClip #Moviepy V1
+except ImportError:
+    from moviepy import ImageSequenceClip #Moviepy V2
+
 import torchvision.transforms as transforms
 from tqdm import tqdm
 import torch.cuda
