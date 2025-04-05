@@ -23,6 +23,8 @@ import sys
 import subprocess
 import tempfile
 
+os.system('git submodule update --init --recursive')
+
 def main():
     # Create necessary directories
     os.makedirs("checkpoints", exist_ok=True)
