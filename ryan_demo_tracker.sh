@@ -1,4 +1,4 @@
-python demo.py \
+PYTHONPATH=$PYTHONPATH:$(pwd) python demo.py \
     --prompt "A simple test" \
     --checkpoint_path diffusion_shader_model \
     --output_dir outputs \
