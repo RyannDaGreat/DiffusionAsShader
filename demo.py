@@ -27,6 +27,8 @@ from submodules.MoGe.moge.model.v1 import MoGeModel
 from submodules.vggt.vggt.utils.pose_enc import pose_encoding_to_extri_intri
 from submodules.vggt.vggt.models.vggt import VGGT
 
+import rp
+
 def load_media(media_path, max_frames=49, transform=None):
     """Load video or image frames and convert to tensor
     
@@ -50,7 +52,7 @@ def load_media(media_path, max_frames=49, transform=None):
     
     if is_video:
         # Load video file info
-        video_clip = VideoFileClip(media_path)
+        video_clip = rp.r._moviepy_VideoFileClip(media_path)
         duration = video_clip.duration
         original_fps = video_clip.fps
         
