@@ -308,6 +308,7 @@ if __name__ == "__main__":
         # T_Firsts is uint8 type and should stay as integer type
         if args.tracking_method == "spatracker":
             tracks_data["T_Firsts"] = T_Firsts.detach().cpu()
+            tracks_data["T_Firsts"] = tracks_data["T_Firsts"].squeeze()
             assert tracks_data["T_Firsts"].shape == (N,), f"T_Firsts shape: {tracks_data['T_Firsts'].shape}, expected: ({N},)"
 
     # Save the tracks to a file
