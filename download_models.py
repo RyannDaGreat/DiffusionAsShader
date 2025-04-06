@@ -150,6 +150,8 @@ def download_inference_models():
         shutil.copy2(spatracker_src, spatracker_dst)
         print(f"Successfully copied SpatialTracker model to {spatracker_dst}")
     
+    os.system('cp diffusion_shader_model/spatracker/*.pth checkpoints')
+    
     # Install rich for better table display
     subprocess.check_call([sys.executable, "-m", "pip", "install", "rich", "-q"])
     from rich.console import Console
@@ -158,6 +160,7 @@ def download_inference_models():
     # Create a list of files to check
     files_to_check = [
         {"name": "SpatialTracker Model", "path": "checkpoints/spatracker_model.pth", "critical": True},
+        {"name": "SpaT", "path": "checkpoints/spaT_final.pth", "critical": True},
         {"name": "Example Butterfly MP4", "path": "checkpoints/examples/butterfly_rgb/butterfly.mp4", "critical": False},
         {"name": "Example Butterfly PNG", "path": "checkpoints/examples/butterfly_rgb/butterfly.png", "critical": False},
         {"name": "Diffusion Shader Model - Config", "path": "diffusion_shader_model/model_index.json", "critical": True},
