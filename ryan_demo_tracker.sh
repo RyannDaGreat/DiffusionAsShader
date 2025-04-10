@@ -4,4 +4,5 @@ PYTHONPATH=$PYTHONPATH:$(pwd) python demo.py \
     --output_dir outputs \
     --input_path example_inputs/firegirl1.mp4 \
     --tracking_method spatracker \
+    --tracking_only \
     --gpu 0
