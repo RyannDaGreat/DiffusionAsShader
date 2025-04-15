@@ -116,8 +116,16 @@ class GsSample:
         Creates properties like video, video_path, prompt, prompt_path etc
         """
         for name, path in properties.items():
-            setattr(self.__class__, name, cached_property(lambda self, p=path: self.load_file(p)))
-            setattr(self.__class__, f"{name}_path", cached_property(lambda self, p=path: self.path_join(p)))
+            # Create dynamic property getter functions
+            def make_getter(path_value):
+                return lambda self: self.load_file(path_value)
+                
+            def make_path_getter(path_value):
+                return lambda self: self.path_join(path_value)
+                
+            # Define the properties with proper descriptors
+            setattr(self.__class__, name, property(make_getter(path)))
+            setattr(self.__class__, f"{name}_path", property(make_path_getter(path)))
 
 class RawYoutubeGsSample(GsSample):
     ROOT = rp.get_absolute_path("~/CleanCode/Datasets/Vids/Raw_Feb28/Processed_April7")
@@ -146,7 +154,19 @@ class RawYoutubeGsSample(GsSample):
 
 
 class ProcessedYoutubeGsSample(GsSample):
-    """ Sample containing YouTube processed data """
+    """ 
+    Sample containing YouTube processed data 
+    PROPERTIES:
+        .path
+        .video
+        .video_path
+        .cogxCounterVideo
+        .cogxCounterVideo_path
+        .video_dasTrackvid
+        .video_dasTrackvid_path
+        .cogxCounterVideo_dasTrackvid
+        .cogxCounterVideo_dasTrackvid_path
+    """
     
     def __init__(self, loc):
         super().__init__(loc)
