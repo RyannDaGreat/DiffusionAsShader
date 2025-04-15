@@ -9,8 +9,8 @@ from functools import cached_property
 
 sys.path += rp.get_absolute_paths(
     "~/CleanCode/Management",
-    "~/CleanCode/Github/DiffusionAsShader",
-    "~/CleanCode/Datasets/Vids/Raw_Feb28",
+    # "~/CleanCode/Github/DiffusionAsShader",
+    # "~/CleanCode/Datasets/Vids/Raw_Feb28",
     # "~/CleanCode/Github/CogvideX-Interpolation-Mar23:MotionPrompting",
     # "~/CleanCode/Github/CogvideX-Interpolation-Feb13:Inpainting",
 )
