@@ -1,6 +1,3 @@
-import os
-import subprocess
-
 from rp import *
 
 sys.path += rp.get_absolute_paths(
@@ -32,6 +29,10 @@ prompt    = [x.prompt                 for x in samples]
 videos    = [x.video_path             for x in samples]
 trackings = [x.video_dasTrackvid_path for x in samples]
 
-save_file_lines(prompt   , "prompt.txt"   )
-save_file_lines(videos   , "videos.txt"   )
-save_file_lines(trackings, "trackings.txt")
+prompt_path    = save_file_lines(prompt   , "prompt.txt"   )
+videos_path    = save_file_lines(videos   , "videos.txt"   )
+trackings_path = save_file_lines(trackings, "trackings.txt")
+
+print(fansi_highlight_path(get_absolute_path(prompt_path   )))
+print(fansi_highlight_path(get_absolute_path(videos_path   )))
+print(fansi_highlight_path(get_absolute_path(trackings_path)))
