@@ -1,9 +1,18 @@
 #!/bin/bash
+
+#Ryan: Please run this from the scripts directory!
+
+python ../source/datasets/youtube/DaS/Vanilla/make_columns.py
+#That generates the following files:
+#    ../source/datasets/youtube/DaS/Vanilla/prompt.txt
+#    ../source/datasets/youtube/DaS/Vanilla/videos.txt
+#    ../source/datasets/youtube/DaS/Vanilla/trackings.txt
+
 set -x
 
 export TORCH_LOGS="+dynamo,recompiles,graph_breaks"
 export TORCHDYNAMO_VERBOSE=1
-export WANDB_MODE="online"
+export WANDB_MODE="offline"
 export NCCL_P2P_DISABLE=1
 export TORCH_NCCL_ENABLE_MONITORING=0
 export TOKENIZERS_PARALLELISM=false
@@ -28,12 +37,13 @@ ACCELERATE_CONFIG_FILE="accelerate_configs/uncompiled_2.yaml"
 # Absolute path to where the data is located. Make sure to have read the README for how to prepare data.
 
 # training dataset parameters
-DATA_ROOT="../datasets/cogshader"
-MODEL_PATH="../ckpts/CogVideoX-5b-I2V"
+DATA_ROOT="/"
+# MODEL_PATH="../ckpts/CogVideoX-5b-I2V"
+MODEL_PATH="./diffusion_shader_model"
 OUTPUT_PATH="../ckpts/your_ckpt_path"
-CAPTION_COLUMN="prompt.txt"
-VIDEO_COLUMN="videos.txt"
-TRACKING_COLUMN="trackings.txt"
+CAPTION_COLUMN="../source/datasets/youtube/DaS/Vanilla/prompt.txt"
+VIDEO_COLUMN="../source/datasets/youtube/DaS/Vanilla/videos.txt"
+TRACKING_COLUMN="../source/datasets/youtube/DaS/Vanilla/trackings.txt"
 
 # validation parameters
 TRACKING_MAP_PATH="../videos/tracking.mp4"
