@@ -24,6 +24,8 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict, Union, Optional
 
+import rp
+
 import diffusers
 import torch
 import transformers
@@ -858,6 +860,8 @@ def main(args):
             gradient_norm_after_clip = None
 
             with accelerator.accumulate(models_to_accumulate):
+                rp.fansi_print('str(batch): '+str(batch), 'italic bold light blue on black')
+
                 videos = batch["videos"].to(accelerator.device, non_blocking=True)
                 images = batch["images"].to(accelerator.device, non_blocking=True)
                 prompts = batch["prompts"]

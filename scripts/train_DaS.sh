@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#Ryan: Please run this from the scripts directory!
+#Ryan: Please run this from the PARENT of the scripts directory!
 
-python ../source/datasets/youtube/DaS/Vanilla/make_columns.py
+python ./source/datasets/youtube/DaS/Vanilla/make_columns.py
 #That generates the following files:
-#    ../source/datasets/youtube/DaS/Vanilla/prompt.txt
-#    ../source/datasets/youtube/DaS/Vanilla/videos.txt
-#    ../source/datasets/youtube/DaS/Vanilla/trackings.txt
+#    ./source/datasets/youtube/DaS/Vanilla/prompt.txt
+#    ./source/datasets/youtube/DaS/Vanilla/videos.txt
+#    ./source/datasets/youtube/DaS/Vanilla/trackings.txt
 
 set -x
 
@@ -38,17 +38,17 @@ ACCELERATE_CONFIG_FILE="accelerate_configs/uncompiled_2.yaml"
 
 # training dataset parameters
 DATA_ROOT="/"
-# MODEL_PATH="../ckpts/CogVideoX-5b-I2V"
+# MODEL_PATH="./ckpts/CogVideoX-5b-I2V"
 MODEL_PATH="./diffusion_shader_model"
-OUTPUT_PATH="../ckpts/your_ckpt_path"
-CAPTION_COLUMN="../source/datasets/youtube/DaS/Vanilla/prompt.txt"
-VIDEO_COLUMN="../source/datasets/youtube/DaS/Vanilla/videos.txt"
-TRACKING_COLUMN="../source/datasets/youtube/DaS/Vanilla/trackings.txt"
+OUTPUT_PATH="./ckpts/your_ckpt_path"
+CAPTION_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/prompt.txt"
+VIDEO_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/videos.txt"
+TRACKING_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/trackings.txt"
 
 # validation parameters
-TRACKING_MAP_PATH="../videos/tracking.mp4"
-VALIDATION_PROMPT="text"
-VALIDATION_IMAGES="../videos/first_frame.png"
+TRACKING_MAP_PATH="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/video.mp4__DiffusionAsShaderCondition/tracking_video.mp4"
+VALIDATION_PROMPT="A soccer player from Hertha BSC is in the field with the ball while an opposing player is running towards him."
+VALIDATION_IMAGES="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/video_firstFrame.png"
 
 # Launch experiments with different hyperparameters
 for learning_rate in "${LEARNING_RATES[@]}"; do
