@@ -25,9 +25,9 @@ load_files(
     num_threads=100,
 )
 
-prompt    = [x.prompt                 for x in samples]
-videos    = [x.video_path             for x in samples]
-trackings = [x.video_dasTrackvid_path for x in samples]
+prompt    = [x.prompt.replace('\n',' ') for x in samples]
+videos    = [x.video_path               for x in samples]
+trackings = [x.video_dasTrackvid_path   for x in samples]
 
 prompt_path    = save_file_lines(prompt   , "prompt.txt"   )
 videos_path    = save_file_lines(videos   , "videos.txt"   )
