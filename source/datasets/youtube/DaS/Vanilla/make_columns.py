@@ -1,0 +1,37 @@
+import os
+import subprocess
+
+from rp import *
+
+sys.path += rp.get_absolute_paths(
+    [
+        # "~/CleanCode/Management",
+        "~/CleanCode/Github/DiffusionAsShader",
+        # "~/CleanCode/Datasets/Vids/Raw_Feb28",
+        # "~/CleanCode/Github/CogvideX-Interpolation-Mar23:MotionPrompting",
+        # "~/CleanCode/Github/CogvideX-Interpolation-Feb13:Inpainting",
+    ]
+)
+
+from source.datasets.youtube.youtube_dataset import ProcessedYoutubeDataset
+
+dataset = ProcessedYoutubeDataset()
+
+# Right now just using 1000 samples so I can test the code and make sure it runs
+samples = gather(dataset, range(1000))
+
+load_files(
+    lambda sample: sample.prompt,
+    samples,
+    show_progress=True,
+    strict=True,
+    num_threads=100,
+)
+
+prompt    = [x.prompt                 for x in samples]
+videos    = [x.video_path             for x in samples]
+trackings = [x.video_dasTrackvid_path for x in samples]
+
+save_file_lines(prompt   , "prompt.txt"   )
+save_file_lines(videos   , "videos.txt"   )
+save_file_lines(trackings, "trackings.txt")
