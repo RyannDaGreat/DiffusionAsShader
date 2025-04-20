@@ -305,7 +305,13 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         self.tracking_column = kwargs.pop("tracking_column", None)
         super().__init__(*args, **kwargs)
 
-    def _preprocess_video(self, path: Path, tracking_path: Path) -> torch.Tensor:
+    def _preprocess_video(
+        self,
+        path: Path,
+        tracking_path: Path,
+        counter_tracking_path: Path,
+        counter_video_path: Path,
+    ) -> torch.Tensor:
         if self.load_tensors:
             return self._load_preprocessed_latents_and_embeds(path, tracking_path)
         else:
@@ -344,7 +350,21 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             tracking_frames_resized = torch.stack([resize(tracking_frame, nearest_res) for tracking_frame in tracking_frames], dim=0)
             tracking_frames = torch.stack([self.video_transforms(tracking_frame) for tracking_frame in tracking_frames_resized], dim=0)
 
-            return image, frames, tracking_frames, None
+            counter_tracking_reader = decord.VideoReader(uri=counter_tracking_path.as_posix())
+            counter_tracking_frames = counter_tracking_reader.get_batch(frame_indices)
+            counter_tracking_frames = counter_tracking_frames[:nearest_frame_bucket].float()
+            counter_tracking_frames = counter_tracking_frames.permute(0, 3, 1, 2).contiguous()
+            counter_tracking_frames_resized = torch.stack([resize(counter_tracking_frame, nearest_res) for counter_tracking_frame in counter_tracking_frames], dim=0)
+            counter_tracking_frames = torch.stack([self.video_transforms(counter_tracking_frame) for counter_tracking_frame in counter_tracking_frames_resized], dim=0)
+
+            counter_video_reader = decord.VideoReader(uri=counter_video_path.as_posix())
+            counter_video_frames = counter_video_reader.get_batch(frame_indices)
+            counter_video_frames = counter_video_frames[:nearest_frame_bucket].float()
+            counter_video_frames = counter_video_frames.permute(0, 3, 1, 2).contiguous()
+            counter_video_frames_resized = torch.stack([resize(counter_video_frame, nearest_res) for counter_video_frame in counter_video_frames], dim=0)
+            counter_video_frames = torch.stack([self.video_transforms(counter_video_frame) for counter_video_frame in counter_video_frames_resized], dim=0)
+
+            return image, frames, tracking_frames, counter_tracking_frames, counter_video_frames, None
 
     def _find_nearest_resolution(self, height, width):
         nearest_res = min(self.resolutions, key=lambda x: abs(x[1] - height) + abs(x[2] - width))
@@ -357,6 +377,8 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         prompt_path = self.data_root.joinpath(self.caption_column)
         video_path = self.data_root.joinpath(self.video_column)
         tracking_path = self.data_root.joinpath(self.tracking_column)
+        counter_tracking_path = self.data_root.joinpath(self.counter_tracking_column)
+        counter_video_path = self.data_root.joinpath(self.counter_video_column)
 
         if not prompt_path.exists() or not prompt_path.is_file():
             raise ValueError(
@@ -370,6 +392,14 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             raise ValueError(
                 "Expected `--tracking_column` to be path to a file in `--data_root` containing line-separated tracking information."
             )
+        if not counter_tracking_path.exists() or not counter_tracking_path.is_file():
+            raise ValueError(
+                "Expected `--counter_tracking_column` to be path to a file in `--data_root` containing line-separated counter_tracking information."
+            )
+        if not counter_video_path.exists() or not counter_video_path.is_file():
+            raise ValueError(
+                "Expected `--counter_video_column` to be path to a file in `--data_root` containing line-separated counter_video information."
+            )
 
         with open(prompt_path, "r", encoding="utf-8") as file:
             prompts = [line.strip() for line in file.readlines() if len(line.strip()) > 0]
@@ -377,6 +407,10 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             video_paths = [self.data_root.joinpath(line.strip()) for line in file.readlines() if len(line.strip()) > 0]
         with open(tracking_path, "r", encoding="utf-8") as file:
             tracking_paths = [self.data_root.joinpath(line.strip()) for line in file.readlines() if len(line.strip()) > 0]
+        with open(counter_tracking_path, "r", encoding="utf-8") as file:
+            counter_tracking_paths = [self.data_root.joinpath(line.strip()) for line in file.readlines() if len(line.strip()) > 0]
+        with open(counter_video_path, "r", encoding="utf-8") as file:
+            counter_video_paths = [self.data_root.joinpath(line.strip()) for line in file.readlines() if len(line.strip()) > 0]
 
         if not self.load_tensors and any(not path.is_file() for path in video_paths):
             raise ValueError(
@@ -384,6 +418,8 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             )
 
         self.tracking_paths = tracking_paths
+        self.counter_tracking_paths = counter_tracking_paths
+        self.counter_video_paths = counter_video_paths
         return prompts, video_paths
 
     def _load_dataset_from_csv(self) -> Tuple[List[str], List[str], List[str]]:
@@ -391,8 +427,12 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         prompts = df[self.caption_column].tolist()
         video_paths = df[self.video_column].tolist()
         tracking_paths = df[self.tracking_column].tolist()
+        counter_tracking_paths = df[self.counter_tracking_column].tolist()
+        counter_video_paths = df[self.counter_video_column].tolist()
         video_paths = [self.data_root.joinpath(line.strip()) for line in video_paths]
         tracking_paths = [self.data_root.joinpath(line.strip()) for line in tracking_paths]
+        counter_tracking_paths = [self.data_root.joinpath(line.strip()) for line in counter_tracking_paths]
+        counter_video_paths = [self.data_root.joinpath(line.strip()) for line in counter_video_paths]
 
         if any(not path.is_file() for path in video_paths):
             raise ValueError(
@@ -400,6 +440,8 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             )
 
         self.tracking_paths = tracking_paths
+        self.counter_tracking_paths = counter_tracking_paths
+        self.counter_video_paths = counter_video_paths
         return prompts, video_paths
     
     def __getitem__(self, index: int) -> Dict[str, Any]:
@@ -409,38 +451,46 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         while True:
             try:
                 if self.load_tensors:
-                    image_latents, video_latents, prompt_embeds = self._preprocess_video(self.video_paths[index], self.tracking_paths[index])
-
-                    # The VAE's temporal compression ratio is 4.
-                    # The VAE's spatial compression ratio is 8.
-                    latent_num_frames = video_latents.size(1)
-                    if latent_num_frames % 2 == 0:
-                        num_frames = latent_num_frames * 4
-                    else:
-                        num_frames = (latent_num_frames - 1) * 4 + 1
-
-                    height = video_latents.size(2) * 8
-                    width = video_latents.size(3) * 8
-
-                    return {
-                        "prompt": prompt_embeds,
-                        "image": image_latents,
-                        "video": video_latents,
-                        "tracking_map": tracking_map,
-                        "video_metadata": {
-                            "num_frames": num_frames,
-                            "height": height,
-                            "width": width,
-                        },
-                    }
+                    assert False, 'Currently we do not support load_tensors'
+                    # image_latents, video_latents, prompt_embeds = self._preprocess_video(self.video_paths[index], self.tracking_paths[index])
+                    #
+                    # # The VAE's temporal compression ratio is 4.
+                    # # The VAE's spatial compression ratio is 8.
+                    # latent_num_frames = video_latents.size(1)
+                    # if latent_num_frames % 2 == 0:
+                    #     num_frames = latent_num_frames * 4
+                    # else:
+                    #     num_frames = (latent_num_frames - 1) * 4 + 1
+                    #
+                    # height = video_latents.size(2) * 8
+                    # width = video_latents.size(3) * 8
+                    #
+                    # return {
+                    #     "prompt": prompt_embeds,
+                    #     "image": image_latents,
+                    #     "video": video_latents,
+                    #     "tracking_map": tracking_map,
+                    #     "video_metadata": {
+                    #         "num_frames": num_frames,
+                    #         "height": height,
+                    #         "width": width,
+                    #     },
+                    # }
                 else:
-                    image, video, tracking_map, _ = self._preprocess_video(self.video_paths[index], self.tracking_paths[index])
+                    image, video, tracking_map, counter_tracking_map, counter_video_map, _ = self._preprocess_video(
+                        self.video_paths[index],
+                        self.tracking_paths[index],
+                        self.counter_tracking_paths[index],
+                        self.counter_video_paths[index],
+                    )
                     rp.fansi_print(f'Good sample at index={index}','green green italic bold')
                     return {
                         "prompt": self.id_token + self.prompts[index],
                         "image": image,
                         "video": video,
                         "tracking_map": tracking_map,
+                        "counter_tracking_map": counter_tracking_map,
+                        "counter_video_map": counter_video_map,
                         "video_metadata": {
                             "num_frames": video.shape[0],
                             "height": video.shape[2],
@@ -454,50 +504,52 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             
     
     def _load_preprocessed_latents_and_embeds(self, path: Path, tracking_path: Path) -> Tuple[torch.Tensor, torch.Tensor]:
-        filename_without_ext = path.name.split(".")[0]
-        pt_filename = f"{filename_without_ext}.pt"
+        assert False, 'Currently we do not support loading tensors, only videos. Update this func if that changes.
 
-        # The current path is something like: /a/b/c/d/videos/00001.mp4
-        # We need to reach: /a/b/c/d/video_latents/00001.pt
-        image_latents_path = path.parent.parent.joinpath("image_latents")
-        video_latents_path = path.parent.parent.joinpath("video_latents")
-        tracking_map_path = path.parent.parent.joinpath("tracking_map")
-        embeds_path = path.parent.parent.joinpath("prompt_embeds")
-
-        if (
-            not video_latents_path.exists()
-            or not embeds_path.exists()
-            or not tracking_map_path.exists()
-            or (self.image_to_video and not image_latents_path.exists())
-        ):
-            raise ValueError(
-                f"When setting the load_tensors parameter to `True`, it is expected that the `{self.data_root=}` contains folders named `video_latents`, `prompt_embeds`, and `tracking_map`. However, these folders were not found. Please make sure to have prepared your data correctly using `prepare_data.py`. Additionally, if you're training image-to-video, it is expected that an `image_latents` folder is also present."
-            )
-
-        if self.image_to_video:
-            image_latent_filepath = image_latents_path.joinpath(pt_filename)
-        video_latent_filepath = video_latents_path.joinpath(pt_filename)
-        tracking_map_filepath = tracking_map_path.joinpath(pt_filename)
-        embeds_filepath = embeds_path.joinpath(pt_filename)
-
-        if not video_latent_filepath.is_file() or not embeds_filepath.is_file() or not tracking_map_filepath.is_file():
-            if self.image_to_video:
-                image_latent_filepath = image_latent_filepath.as_posix()
-            video_latent_filepath = video_latent_filepath.as_posix()
-            tracking_map_filepath = tracking_map_filepath.as_posix()
-            embeds_filepath = embeds_filepath.as_posix()
-            raise ValueError(
-                f"The file {video_latent_filepath=} or {embeds_filepath=} or {tracking_map_filepath=} could not be found. Please ensure that you've correctly executed `prepare_dataset.py`."
-            )
-
-        images = (
-            torch.load(image_latent_filepath, map_location="cpu", weights_only=True) if self.image_to_video else None
-        )
-        latents = torch.load(video_latent_filepath, map_location="cpu", weights_only=True)
-        tracking_map = torch.load(tracking_map_filepath, map_location="cpu", weights_only=True)
-        embeds = torch.load(embeds_filepath, map_location="cpu", weights_only=True)
-
-        return images, latents, tracking_map, embeds
+        # filename_without_ext = path.name.split(".")[0]
+        # pt_filename = f"{filename_without_ext}.pt"
+        #
+        # # The current path is something like: /a/b/c/d/videos/00001.mp4
+        # # We need to reach: /a/b/c/d/video_latents/00001.pt
+        # image_latents_path = path.parent.parent.joinpath("image_latents")
+        # video_latents_path = path.parent.parent.joinpath("video_latents")
+        # tracking_map_path = path.parent.parent.joinpath("tracking_map")
+        # embeds_path = path.parent.parent.joinpath("prompt_embeds")
+        #
+        # if (
+        #     not video_latents_path.exists()
+        #     or not embeds_path.exists()
+        #     or not tracking_map_path.exists()
+        #     or (self.image_to_video and not image_latents_path.exists())
+        # ):
+        #     raise ValueError(
+        #         f"When setting the load_tensors parameter to `True`, it is expected that the `{self.data_root=}` contains folders named `video_latents`, `prompt_embeds`, and `tracking_map`. However, these folders were not found. Please make sure to have prepared your data correctly using `prepare_data.py`. Additionally, if you're training image-to-video, it is expected that an `image_latents` folder is also present."
+        #     )
+        #
+        # if self.image_to_video:
+        #     image_latent_filepath = image_latents_path.joinpath(pt_filename)
+        # video_latent_filepath = video_latents_path.joinpath(pt_filename)
+        # tracking_map_filepath = tracking_map_path.joinpath(pt_filename)
+        # embeds_filepath = embeds_path.joinpath(pt_filename)
+        #
+        # if not video_latent_filepath.is_file() or not embeds_filepath.is_file() or not tracking_map_filepath.is_file():
+        #     if self.image_to_video:
+        #         image_latent_filepath = image_latent_filepath.as_posix()
+        #     video_latent_filepath = video_latent_filepath.as_posix()
+        #     tracking_map_filepath = tracking_map_filepath.as_posix()
+        #     embeds_filepath = embeds_filepath.as_posix()
+        #     raise ValueError(
+        #         f"The file {video_latent_filepath=} or {embeds_filepath=} or {tracking_map_filepath=} could not be found. Please ensure that you've correctly executed `prepare_dataset.py`."
+        #     )
+        #
+        # images = (
+        #     torch.load(image_latent_filepath, map_location="cpu", weights_only=True) if self.image_to_video else None
+        # )
+        # latents = torch.load(video_latent_filepath, map_location="cpu", weights_only=True)
+        # tracking_map = torch.load(tracking_map_filepath, map_location="cpu", weights_only=True)
+        # embeds = torch.load(embeds_filepath, map_location="cpu", weights_only=True)
+        #
+        # return images, latents, tracking_map, embeds
 
 class VideoDatasetWithResizeAndRectangleCrop(VideoDataset):
     def __init__(self, video_reshape_mode: str = "center", *args, **kwargs) -> None:

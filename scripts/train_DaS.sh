@@ -44,9 +44,13 @@ OUTPUT_PATH="./ckpts/your_ckpt_path"
 CAPTION_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/prompt.txt"
 VIDEO_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/videos.txt"
 TRACKING_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/trackings.txt"
+COUNTER_TRACKING_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/counter_trackings.txt"
+COUNTER_VIDEO_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/counter_videos.txt"
 
 # validation parameters
 TRACKING_MAP_PATH="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/video.mp4__DiffusionAsShaderCondition/tracking_video.mp4"
+COUNTER_TRACKING_MAP_PATH="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/firstLastInterp_Jack2000.mp4__DiffusionAsShaderCondition/tracking_video.mp4"
+COUNTER_VIDEO_MAP_PATH="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/firstLastInterp_Jack2000.mp4"
 VALIDATION_PROMPT="A soccer player from Hertha BSC is in the field with the ball while an opposing player is running towards him."
 VALIDATION_IMAGES="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/video_firstFrame.png"
 
@@ -63,7 +67,11 @@ for learning_rate in "${LEARNING_RATES[@]}"; do
           --caption_column $CAPTION_COLUMN \
           --video_column $VIDEO_COLUMN \
           --tracking_column $TRACKING_COLUMN \
+          --counter_tracking_column $COUNTER_TRACKING_COLUMN \
+          --counter_video_column $COUNTER_VIDEO_COLUMN \
           --tracking_map_path $TRACKING_MAP_PATH \
+          --tracking_map_path $COUNTER_TRACKING_MAP_PATH \
+          --tracking_map_path $COUNTER_VIDEO_MAP_PATH \
           --num_tracking_blocks 18 \
           --height_buckets 480 \
           --width_buckets 720 \

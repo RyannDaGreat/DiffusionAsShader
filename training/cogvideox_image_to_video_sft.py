@@ -857,6 +857,7 @@ def main(args):
 
     alphas_cumprod = scheduler.alphas_cumprod.to(accelerator.device, dtype=torch.float32)
 
+    #MAIN LOOP:
     for epoch in range(first_epoch, args.num_train_epochs):
         transformer.train()
 
@@ -875,6 +876,14 @@ def main(args):
                 if args.tracking_column is not None:
                     tracking_maps = batch["tracking_maps"].to(accelerator.device, non_blocking=True)
                     tracking_image = tracking_maps[:,:1].clone()
+
+                if args.counter_tracking_column is not None:
+                    counter_tracking_maps = batch["counter_tracking_maps"].to(accelerator.device, non_blocking=True)
+                    counter_tracking_image = counter_tracking_maps[:,:1].clone()
+
+                if args.counter_video_column is not None:
+                    counter_video_maps = batch["counter_video_maps"].to(accelerator.device, non_blocking=True)
+                    counter_video_image = counter_video_maps[:,:1].clone()
 
                 # Encode videos
                 if not args.load_tensors:
@@ -895,6 +904,21 @@ def main(args):
 
                         tracking_image = tracking_image.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
                         tracking_image_latent_dist = vae.encode(tracking_image).latent_dist
+
+                    if args.counter_tracking_column is not None:
+                        counter_tracking_maps = counter_tracking_maps.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
+                        counter_tracking_latent_dist = vae.encode(counter_tracking_maps).latent_dist
+
+                        counter_tracking_image = counter_tracking_image.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
+                        counter_tracking_image_latent_dist = vae.encode(counter_tracking_image).latent_dist
+
+                    if args.counter_video_column is not None:
+                        counter_video_maps = counter_video_maps.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
+                        counter_video_latent_dist = vae.encode(counter_video_maps).latent_dist
+
+                        counter_video_image = counter_video_image.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
+                        counter_video_image_latent_dist = vae.encode(counter_video_image).latent_dist
+
                 else:
                     latent_dist = DiagonalGaussianDistribution(videos)
                     image_latent_dist = DiagonalGaussianDistribution(images)
@@ -918,14 +942,43 @@ def main(args):
                 tracking_latent_padding = tracking_image_latent_dist.new_zeros(padding_shape)
                 tracking_image_latents = torch.cat([tracking_image_latent_dist, tracking_latent_padding], dim=1)
 
+
+                counter_tracking_image_latent_dist = counter_tracking_image_latent_dist.sample() * VAE_SCALING_FACTOR
+                counter_tracking_image_latent_dist = counter_tracking_image_latent_dist.permute(0, 2, 1, 3, 4)  # [b, f, c, h, w]
+                counter_tracking_image_latent_dist = counter_tracking_image_latent_dist.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
+
+                counter_tracking_latent_padding = counter_tracking_image_latent_dist.new_zeros(padding_shape)
+                counter_tracking_image_latents = torch.cat([counter_tracking_image_latent_dist, counter_tracking_latent_padding], dim=1)
+
+
+                counter_video_image_latent_dist = counter_video_image_latent_dist.sample() * VAE_SCALING_FACTOR
+                counter_video_image_latent_dist = counter_video_image_latent_dist.permute(0, 2, 1, 3, 4)  # [b, f, c, h, w]
+                counter_video_image_latent_dist = counter_video_image_latent_dist.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
+
+                counter_video_latent_padding = counter_video_image_latent_dist.new_zeros(padding_shape)
+                counter_video_image_latents = torch.cat([counter_video_image_latent_dist, counter_video_latent_padding], dim=1)
+
+
                 if random.random() < args.noised_image_dropout:
                     image_latents = torch.zeros_like(image_latents)
                     tracking_image_latents = torch.zeros_like(tracking_image_latents)
+                    counter_tracking_image_latents = torch.zeros_like(counter_tracking_image_latents)
+                    counter_video_image_latents = torch.zeros_like(counter_video_image_latents)
 
                 if args.tracking_column is not None:
                     tracking_maps = tracking_latent_dist.sample() * VAE_SCALING_FACTOR
                     tracking_maps = tracking_maps.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
                     tracking_maps = tracking_maps.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
+
+                if args.counter_tracking_column is not None:
+                    counter_tracking_maps = counter_tracking_latent_dist.sample() * VAE_SCALING_FACTOR
+                    counter_tracking_maps = counter_tracking_maps.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
+                    counter_tracking_maps = counter_tracking_maps.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
+
+                if args.counter_video_column is not None:
+                    counter_video_maps = counter_video_latent_dist.sample() * VAE_SCALING_FACTOR
+                    counter_video_maps = counter_video_maps.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
+                    counter_video_maps = counter_video_maps.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
 
                 # Encode prompts
                 if not args.load_tensors:
@@ -974,20 +1027,25 @@ def main(args):
                 noisy_video_latents = scheduler.add_noise(video_latents, noise, timesteps)
                 noisy_model_input = torch.cat([noisy_video_latents, image_latents], dim=2)
                 tracking_latents = torch.cat([tracking_maps, tracking_image_latents], dim=2)
+                counter_tracking_latents = torch.cat([counter_tracking_maps, counter_tracking_image_latents], dim=2)
+                counter_video_latents = torch.cat([counter_video_maps, counter_video_image_latents], dim=2)
 
                 if args.tracking_column is None:
-                    model_output = transformer(
-                        hidden_states=noisy_model_input,
-                        encoder_hidden_states=prompt_embeds,
-                        timestep=timesteps,
-                        image_rotary_emb=image_rotary_emb,
-                        return_dict=False,
-                    )[0]
+                    assert False, args
+                    # model_output = transformer(
+                    #     hidden_states=noisy_model_input,
+                    #     encoder_hidden_states=prompt_embeds,
+                    #     timestep=timesteps,
+                    #     image_rotary_emb=image_rotary_emb,
+                    #     return_dict=False,
+                    # )[0]
                 else:
                     model_output = transformer(
                         hidden_states=noisy_model_input,
                         encoder_hidden_states=prompt_embeds,
                         tracking_maps=tracking_latents,
+                        counter_tracking_maps=counter_tracking_latents,
+                        counter_video_maps=counter_video_latents,
                         timestep=timesteps,
                         image_rotary_emb=image_rotary_emb,
                         return_dict=False,
