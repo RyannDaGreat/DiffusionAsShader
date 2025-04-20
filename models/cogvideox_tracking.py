@@ -20,6 +20,8 @@ from diffusers.schedulers import CogVideoXDDIMScheduler, CogVideoXDPMScheduler
 from diffusers.pipelines import DiffusionPipeline   
 from diffusers.models.modeling_utils import ModelMixin
 
+import rp
+
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixin):
@@ -148,15 +150,19 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
 
     def forward(
         self,
-        hidden_states: torch.Tensor,
-        encoder_hidden_states: torch.Tensor,
-        tracking_maps: torch.Tensor,
+        hidden_states: torch.Tensor,         # BTCHW
+        encoder_hidden_states: torch.Tensor, # B Seq_Len Dim
+        tracking_maps: torch.Tensor,         # BTCHW
         timestep: Union[int, float, torch.LongTensor],
         timestep_cond: Optional[torch.Tensor] = None,
         image_rotary_emb: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         attention_kwargs: Optional[Dict[str, Any]] = None,
         return_dict: bool = True,
     ):
+        #FOR REFERENCE:
+        # text_embeds = encoder_hidden_states (BSD) batch seq_len dim
+        # image_embeds = hidden_states (BCTHW) batch chan time height width
+
         if attention_kwargs is not None:
             attention_kwargs = attention_kwargs.copy()
             lora_scale = attention_kwargs.pop("scale", 1.0)
@@ -185,19 +191,31 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
         emb = self.time_embedding(t_emb, timestep_cond)
 
         # 2. Patch embedding
-        hidden_states = self.patch_embed(encoder_hidden_states, hidden_states)
+        # Transform latents [B, F, C, H, W] into tokens and concatenate with text embeddings
+        # Result shape: [batch_size, text_seq_length + num_patches, embed_dim]
+        hidden_states = self.patch_embed(encoder_hidden_states, hidden_states) #forward(self, text_embeds: torch.Tensor, image_embeds: torch.Tensor)
         hidden_states = self.embedding_dropout(hidden_states)
 
-        # Process tracking maps
+        #BEFORE PATCH EMBED, UGH THIS CODE DRIVES ME MAD....WHY DID THEY CALL IT HIDDEN_STATES....
+
+        # Process tracking maps - apply the same transformation
         prompt_embed = encoder_hidden_states.clone()
         tracking_maps_hidden_states = self.patch_embed(prompt_embed, tracking_maps)
         tracking_maps_hidden_states = self.embedding_dropout(tracking_maps_hidden_states)
         del prompt_embed
 
+        # At this point, hidden_states contains a concatenation of text tokens and image tokens
+        # We need to separate them to process text and image differently
         text_seq_length = encoder_hidden_states.shape[1]
-        encoder_hidden_states = hidden_states[:, :text_seq_length]
-        hidden_states = hidden_states[:, text_seq_length:]
-        tracking_maps = tracking_maps_hidden_states[:, text_seq_length:]
+        
+        # Get the text tokens from the beginning of the sequence
+        encoder_hidden_states = hidden_states[:, :text_seq_length]  # Shape: [batch_size, text_seq_length, embed_dim]
+        
+        # Get the image tokens (everything after the text tokens)
+        hidden_states = hidden_states[:, text_seq_length:]  # Shape: [batch_size, num_patches, embed_dim]
+        
+        # Apply the same separation to tracking maps
+        tracking_maps = tracking_maps_hidden_states[:, text_seq_length:]  # Keep only image tokens
 
         # Combine hidden states and tracking maps initially
         combined = hidden_states + tracking_maps
@@ -658,10 +676,14 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
         self._num_timesteps = len(timesteps)
 
         # 5. Prepare latents
+        # Process the input image - the image to use as first frame reference [B, C, H, W]
+        # This is a single image (e.g., the first frame of the desired video)
         image = self.video_processor.preprocess(image, height=height, width=width).to(
             device, dtype=prompt_embeds.dtype
         )
 
+        # Process the tracking first frame image [B, C, H, W]
+        # This is a single image (first frame of the tracking video)
         tracking_image = self.video_processor.preprocess(tracking_image, height=height, width=width).to(
             device, dtype=prompt_embeds.dtype
         )
@@ -716,17 +738,30 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
                 if self.interrupt:
                     continue
 
+                # Main content input - the noisy latents being denoised [B, T, C, H, W]
                 latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
+                # Image conditioning - the first frame latents [B, 1, C, H, W]
+                # Used to condition the generation to match the first frame
                 latent_image_input = torch.cat([image_latents] * 2) if do_classifier_free_guidance else image_latents
+                
+                # Concatenate along channel dimension (dim=2)
+                # Result: [B, T, 2*C, H, W] where the channels contain both content and conditioning
                 latent_model_input = torch.cat([latent_model_input, latent_image_input], dim=2)
                 del latent_image_input
 
                 # Handle tracking maps
                 if tracking_maps is not None:
+                    # tracking_image_latents: Encoded first frame of tracking video [B, 1, C, H, W]
+                    # This serves as conditioning for the tracking stream, similar to how image_latents works for the main stream
                     latents_tracking_image = torch.cat([tracking_image_latents] * 2) if do_classifier_free_guidance else tracking_image_latents
+                    
+                    # tracking_maps: Encoded full tracking video [B, T, C, H, W]
+                    # These are the latents of the tracking video showing motion paths
                     tracking_maps_input = torch.cat([tracking_maps] * 2) if do_classifier_free_guidance else tracking_maps
+                    
+                    # Concatenate along channel dimension, exactly matching structure of main input
                     tracking_maps_input = torch.cat([tracking_maps_input, latents_tracking_image], dim=2)
                     del latents_tracking_image
                 else:

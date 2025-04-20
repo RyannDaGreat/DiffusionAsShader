@@ -395,6 +395,8 @@ def main(args):
 
     # CogVideoX-2b weights are stored in float16
     # CogVideoX-5b and CogVideoX-5b-I2V weights are stored in bfloat16
+
+    ##MARK
     load_dtype = torch.bfloat16 if "5b" in args.pretrained_model_name_or_path.lower() else torch.float16
     if not args.tracking_column:
         transformer = CogVideoXTransformer3DModel.from_pretrained(
