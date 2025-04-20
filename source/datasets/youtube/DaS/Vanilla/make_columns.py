@@ -17,8 +17,13 @@ dataset = ProcessedYoutubeDataset()
 # Right now just using 1000 samples so I can test the code and make sure it runs
 samples = gather(dataset, range(1000))
 
+def prepare_sample(sample):
+    if not rp.path_exists(sample.video_480p49_path):
+        sample.video_480p49
+        sample.upload()
+
 load_files(
-    lambda sample: sample.prompt,
+    prepare_sample,
     samples,
     show_progress=True,
     strict=True,
@@ -26,7 +31,7 @@ load_files(
 )
 
 prompt    = [x.prompt.replace('\n',' ') for x in samples]
-videos    = [x.video_path               for x in samples]
+videos    = [x.video_480p49_path        for x in samples]
 trackings = [x.video_dasTrackvid_path   for x in samples]
 
 prompt_path    = save_file_lines(prompt   , "prompt.txt"   )

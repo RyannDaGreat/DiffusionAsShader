@@ -12,6 +12,8 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from torchvision.transforms.functional import resize
 
+from icecream import ic
+import rp
 
 # Must import after torch because this can sometimes lead to a nasty segmentation fault, or stack smashing error
 # Very few bug reports but it happens. Look in decord Github issues for more relevant information.
@@ -315,6 +317,16 @@ class VideoDatasetWithResizingTracking(VideoDataset):
 
             frame_indices = list(range(0, video_num_frames, video_num_frames // nearest_frame_bucket))
 
+            # ic(
+            #     frame_indices,
+            #     video_reader,
+            #     video_num_frames,
+            #     nearest_frame_bucket,
+            #     self.frame_buckets,
+            #     path,
+            #     tracking_path,
+            # )
+
             frames = video_reader.get_batch(frame_indices)
             frames = frames[:nearest_frame_bucket].float()
             frames = frames.permute(0, 3, 1, 2).contiguous()
@@ -394,45 +406,52 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         if isinstance(index, list):
             return index
 
-        if self.load_tensors:
-            image_latents, video_latents, prompt_embeds = self._preprocess_video(self.video_paths[index], self.tracking_paths[index])
+        while True:
+            try:
+                if self.load_tensors:
+                    image_latents, video_latents, prompt_embeds = self._preprocess_video(self.video_paths[index], self.tracking_paths[index])
 
-            # The VAE's temporal compression ratio is 4.
-            # The VAE's spatial compression ratio is 8.
-            latent_num_frames = video_latents.size(1)
-            if latent_num_frames % 2 == 0:
-                num_frames = latent_num_frames * 4
-            else:
-                num_frames = (latent_num_frames - 1) * 4 + 1
+                    # The VAE's temporal compression ratio is 4.
+                    # The VAE's spatial compression ratio is 8.
+                    latent_num_frames = video_latents.size(1)
+                    if latent_num_frames % 2 == 0:
+                        num_frames = latent_num_frames * 4
+                    else:
+                        num_frames = (latent_num_frames - 1) * 4 + 1
 
-            height = video_latents.size(2) * 8
-            width = video_latents.size(3) * 8
+                    height = video_latents.size(2) * 8
+                    width = video_latents.size(3) * 8
 
-            return {
-                "prompt": prompt_embeds,
-                "image": image_latents,
-                "video": video_latents,
-                "tracking_map": tracking_map,
-                "video_metadata": {
-                    "num_frames": num_frames,
-                    "height": height,
-                    "width": width,
-                },
-            }
-        else:
-            image, video, tracking_map, _ = self._preprocess_video(self.video_paths[index], self.tracking_paths[index])
-
-            return {
-                "prompt": self.id_token + self.prompts[index],
-                "image": image,
-                "video": video,
-                "tracking_map": tracking_map,
-                "video_metadata": {
-                    "num_frames": video.shape[0],
-                    "height": video.shape[2],
-                    "width": video.shape[3],
-                },
-            }
+                    return {
+                        "prompt": prompt_embeds,
+                        "image": image_latents,
+                        "video": video_latents,
+                        "tracking_map": tracking_map,
+                        "video_metadata": {
+                            "num_frames": num_frames,
+                            "height": height,
+                            "width": width,
+                        },
+                    }
+                else:
+                    image, video, tracking_map, _ = self._preprocess_video(self.video_paths[index], self.tracking_paths[index])
+                    rp.fansi_print(f'Good sample at index={index}','green green italic bold')
+                    return {
+                        "prompt": self.id_token + self.prompts[index],
+                        "image": image,
+                        "video": video,
+                        "tracking_map": tracking_map,
+                        "video_metadata": {
+                            "num_frames": video.shape[0],
+                            "height": video.shape[2],
+                            "width": video.shape[3],
+                        },
+                    }
+            except Exception as e:
+                rp.fansi_print(f'DATASET ERROR! index={index}    video_path={self.video_paths[index]}    tracking_path={self.tracking_paths[index]}    {e}','red red bold on black black undercurl')
+                # rp.print_stack_trace()
+                index=rp.random_index(self)
+            
     
     def _load_preprocessed_latents_and_embeds(self, path: Path, tracking_path: Path) -> Tuple[torch.Tensor, torch.Tensor]:
         filename_without_ext = path.name.split(".")[0]

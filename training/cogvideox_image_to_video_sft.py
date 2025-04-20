@@ -654,6 +654,8 @@ def main(args):
     collate_fn_tracking = CollateFunctionTracking(weight_dtype, args.load_tensors)
     collate_fn_image_tracking = CollateFunctionImageTracking(weight_dtype, args.load_tensors)
 
+    # rp.fansi_print(f'train_dataset[0]: {train_dataset[0]}','white italic bold blue')
+
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=1,
@@ -695,6 +697,8 @@ def main(args):
                 num_cycles=args.lr_num_cycles,
                 power=args.lr_power,
             )
+
+    # rp.fansi_print("pre-accelerator batch: "+str(next(iter(train_dataloader))),'bold italic white blue')
 
     # Prepare everything with our `accelerator`.
     transformer, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(

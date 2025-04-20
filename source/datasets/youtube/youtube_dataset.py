@@ -181,6 +181,16 @@ class ProcessedYoutubeGsSample(GsSample):
         
         self._create_properties(properties)
 
+        self.video_480p49_path = self.path_join("video_480p49.mp4")
+
+    @cached_property
+    def video_480p49(self):
+        @rp.file_cache_wrap(self.video_480p49_path)
+        def get_video():
+            return rp.resize_images(rp.resize_list(self.video, 49), size=(480, 720))
+
+        return get_video()
+
 class GsDataset:
     def __len__(self):
         return len(self.samples)
