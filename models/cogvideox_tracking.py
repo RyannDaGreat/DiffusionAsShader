@@ -15,7 +15,7 @@ from diffusers.pipelines.cogvideo.pipeline_cogvideox_video2video import CogVideo
 from diffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
 from diffusers.pipelines.cogvideo.pipeline_cogvideox import retrieve_timesteps
 from transformers import T5EncoderModel, T5Tokenizer
-from diffusers.models import AutoencoderKLCogVideoX, CogVideoXTransformer3DModel
+from diffusers.models import AutoencoderKLCogVideoX, CogVideoXTransformer3DModel, CogVideoXPatchEmbed
 from diffusers.schedulers import CogVideoXDDIMScheduler, CogVideoXDPMScheduler
 from diffusers.pipelines import DiffusionPipeline   
 from diffusers.models.modeling_utils import ModelMixin
@@ -132,6 +132,26 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
         self.initial_combine_linear.weight.data.zero_()
         self.initial_combine_linear.bias.data.zero_()
 
+        # Z. Patch embedding 2, for the control branch...
+        # Copied from original cogvid code
+        self.second_patch_embed = CogVideoXPatchEmbed(
+            patch_size=patch_size,
+            patch_size_t=None, #GUESSWORK
+            in_channels=in_channels * 3, #THREE: For all 3 control videos: tracking, counter_tracking and counter_video
+            embed_dim=inner_dim,
+            text_embed_dim=text_embed_dim,
+            bias=True, #GUESSWORK
+            sample_width=sample_width,
+            sample_height=sample_height,
+            sample_frames=sample_frames,
+            temporal_compression_ratio=temporal_compression_ratio,
+            max_text_seq_length=max_text_seq_length,
+            spatial_interpolation_scale=spatial_interpolation_scale,
+            temporal_interpolation_scale=temporal_interpolation_scale,
+            use_positional_embeddings=not use_rotary_positional_embeddings,
+            use_learned_positional_embeddings=use_learned_positional_embeddings,
+        )
+
         # Freeze all parameters
         for param in self.parameters():
             param.requires_grad = False
@@ -147,12 +167,19 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
         
         for param in self.initial_combine_linear.parameters():
             param.requires_grad = True
+        
+        for param in self.second_patch_embed.parameters():
+            param.requires_grad = True
 
     def forward(
         self,
         hidden_states: torch.Tensor,         # BTCHW
         encoder_hidden_states: torch.Tensor, # B Seq_Len Dim
+
         tracking_maps: torch.Tensor,         # BTCHW
+        counter_tracking_maps: torch.Tensor, # BTCHW
+        counter_video_maps: torch.Tensor,    # BTCHW
+
         timestep: Union[int, float, torch.LongTensor],
         timestep_cond: Optional[torch.Tensor] = None,
         image_rotary_emb: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
@@ -162,6 +189,34 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
         #FOR REFERENCE:
         # text_embeds = encoder_hidden_states (BSD) batch seq_len dim
         # image_embeds = hidden_states (BCTHW) batch chan time height width
+        #Channelwise-concatenation of all 3 control signals
+
+        control_maps = torch.cat(
+            [
+                tracking_maps,
+                counter_tracking_maps,
+                counter_video_maps,
+            ],
+            dim=2,
+        )
+
+
+        rp.validate_tensor_shapes(
+            hidden_states         = "B T C H W",
+            #
+            tracking_maps         = "B T C H W",
+            counter_tracking_maps = "B T C H W",
+            counter_video_maps    = "B T C H W",
+            #
+            control_maps          = "B T CCC H W",
+            #
+            encoder_hidden_states = "B Seq Dim",
+            #
+            C=16,
+            CCC=16*3,
+            #
+            verbose='bold altbw white random blue',
+        )
 
         if attention_kwargs is not None:
             attention_kwargs = attention_kwargs.copy()
@@ -200,7 +255,7 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
 
         # Process tracking maps - apply the same transformation
         prompt_embed = encoder_hidden_states.clone()
-        tracking_maps_hidden_states = self.patch_embed(prompt_embed, tracking_maps)
+        tracking_maps_hidden_states = self.second_patch_embed(prompt_embed, control_maps) #MINIMAL CHANGE: Not yet renaming the rest of tracking_* vars to control_* varnames to minimize diff
         tracking_maps_hidden_states = self.embedding_dropout(tracking_maps_hidden_states)
         del prompt_embed
 
@@ -306,9 +361,11 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
             model = super().from_pretrained(pretrained_model_name_or_path, **kwargs)
             print("Loaded DiffusionAsShader checkpoint directly.")
             
+            # Freeze all parameters
             for param in model.parameters():
                 param.requires_grad = False
             
+            # Unfreeze parameters that need to be trained
             for linear in model.combine_linears:
                 for param in linear.parameters():
                     param.requires_grad = True
@@ -318,6 +375,9 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                     param.requires_grad = True
                 
             for param in model.initial_combine_linear.parameters():
+                param.requires_grad = True
+        
+            for param in model.second_patch_embed.parameters():
                 param.requires_grad = True
             
             return model
@@ -358,6 +418,9 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                 
             for param in model.initial_combine_linear.parameters():
                 param.requires_grad = True
+        
+            for param in model.second_patch_embed.parameters():
+                param.requires_grad = True
             
             return model
 
@@ -395,186 +458,186 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                 import json
                 json.dump(config_dict, f, indent=2)
 
-class CogVideoXPipelineTracking(CogVideoXPipeline, DiffusionPipeline):
-
-    def __init__(
-        self,
-        tokenizer: T5Tokenizer,
-        text_encoder: T5EncoderModel,
-        vae: AutoencoderKLCogVideoX,
-        transformer: CogVideoXTransformer3DModelTracking,
-        scheduler: Union[CogVideoXDDIMScheduler, CogVideoXDPMScheduler],
-    ):
-        super().__init__(tokenizer, text_encoder, vae, transformer, scheduler)
-        
-        if not isinstance(self.transformer, CogVideoXTransformer3DModelTracking):
-            raise ValueError("The transformer in this pipeline must be of type CogVideoXTransformer3DModelTracking")
-
-    @torch.no_grad()
-    def __call__(
-        self,
-        prompt: Optional[Union[str, List[str]]] = None,
-        negative_prompt: Optional[Union[str, List[str]]] = None,
-        height: int = 480,
-        width: int = 720,
-        num_frames: int = 49,
-        num_inference_steps: int = 50,
-        timesteps: Optional[List[int]] = None,
-        guidance_scale: float = 6,
-        use_dynamic_cfg: bool = False,
-        num_videos_per_prompt: int = 1,
-        eta: float = 0.0,
-        generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
-        latents: Optional[torch.FloatTensor] = None,
-        prompt_embeds: Optional[torch.FloatTensor] = None,
-        negative_prompt_embeds: Optional[torch.FloatTensor] = None,
-        output_type: str = "pil",
-        return_dict: bool = True,
-        attention_kwargs: Optional[Dict[str, Any]] = None,
-        callback_on_step_end: Optional[
-            Union[Callable[[int, int, Dict], None], PipelineCallback, MultiPipelineCallbacks]
-        ] = None,
-        callback_on_step_end_tensor_inputs: List[str] = ["latents"],
-        max_sequence_length: int = 226,
-        tracking_maps: Optional[torch.Tensor] = None,
-    ) -> Union[CogVideoXPipelineOutput, Tuple]:
-        if isinstance(callback_on_step_end, (PipelineCallback, MultiPipelineCallbacks)):
-            callback_on_step_end_tensor_inputs = callback_on_step_end.tensor_inputs
-
-        num_videos_per_prompt = 1
-
-        self.check_inputs(
-            prompt,
-            height,
-            width,
-            negative_prompt,
-            callback_on_step_end_tensor_inputs,
-            prompt_embeds,
-            negative_prompt_embeds,
-        )
-        self._guidance_scale = guidance_scale
-        self._attention_kwargs = attention_kwargs
-        self._interrupt = False
-
-        if prompt is not None and isinstance(prompt, str):
-            batch_size = 1
-        elif prompt is not None and isinstance(prompt, list):
-            batch_size = len(prompt)
-        else:
-            batch_size = prompt_embeds.shape[0]
-
-        device = self._execution_device
-
-        do_classifier_free_guidance = guidance_scale > 1.0
-
-        prompt_embeds, negative_prompt_embeds = self.encode_prompt(
-            prompt,
-            negative_prompt,
-            do_classifier_free_guidance,
-            num_videos_per_prompt=num_videos_per_prompt,
-            prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds,
-            max_sequence_length=max_sequence_length,
-            device=device,
-        )
-        if do_classifier_free_guidance:
-            prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
-
-        timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, device, timesteps)
-        self._num_timesteps = len(timesteps)
-
-        latent_channels = self.transformer.config.in_channels
-        latents = self.prepare_latents(
-            batch_size * num_videos_per_prompt,
-            latent_channels,
-            num_frames,
-            height,
-            width,
-            prompt_embeds.dtype,
-            device,
-            generator,
-            latents,
-        )
-
-        extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
-
-        image_rotary_emb = (
-            self._prepare_rotary_positional_embeddings(height, width, latents.size(1), device)
-            if self.transformer.config.use_rotary_positional_embeddings
-            else None
-        )
-
-        num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
-
-        with self.progress_bar(total=num_inference_steps) as progress_bar:
-            old_pred_original_sample = None
-            for i, t in enumerate(timesteps):
-                if self.interrupt:
-                    continue
-
-                latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
-                tracking_maps_latent = torch.cat([tracking_maps] * 2) if do_classifier_free_guidance else tracking_maps
-                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
-
-                timestep = t.expand(latent_model_input.shape[0])
-
-                noise_pred = self.transformer(
-                    hidden_states=latent_model_input,
-                    encoder_hidden_states=prompt_embeds,
-                    timestep=timestep,
-                    image_rotary_emb=image_rotary_emb,
-                    attention_kwargs=attention_kwargs,
-                    tracking_maps=tracking_maps_latent,
-                    return_dict=False,
-                )[0]
-                noise_pred = noise_pred.float()
-
-                if use_dynamic_cfg:
-                    self._guidance_scale = 1 + guidance_scale * (
-                        (1 - math.cos(math.pi * ((num_inference_steps - t.item()) / num_inference_steps) ** 5.0)) / 2
-                    )
-                if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
-
-                if not isinstance(self.scheduler, CogVideoXDPMScheduler):
-                    latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
-                else:
-                    latents, old_pred_original_sample = self.scheduler.step(
-                        noise_pred,
-                        old_pred_original_sample,
-                        t,
-                        timesteps[i - 1] if i > 0 else None,
-                        latents,
-                        **extra_step_kwargs,
-                        return_dict=False,
-                    )
-                latents = latents.to(prompt_embeds.dtype)
-
-                if callback_on_step_end is not None:
-                    callback_kwargs = {}
-                    for k in callback_on_step_end_tensor_inputs:
-                        callback_kwargs[k] = locals()[k]
-                    callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
-
-                    latents = callback_outputs.pop("latents", latents)
-                    prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
-                    negative_prompt_embeds = callback_outputs.pop("negative_prompt_embeds", negative_prompt_embeds)
-
-                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
-                    progress_bar.update()
-
-        if not output_type == "latent":
-            video = self.decode_latents(latents)
-            video = self.video_processor.postprocess_video(video=video, output_type=output_type)
-        else:
-            video = latents
-
-        self.maybe_free_model_hooks()
-
-        if not return_dict:
-            return (video,)
-        return CogVideoXPipelineOutput(frames=video)
+# class CogVideoXPipelineTracking(CogVideoXPipeline, DiffusionPipeline):
+#
+#     def __init__(
+#         self,
+#         tokenizer: T5Tokenizer,
+#         text_encoder: T5EncoderModel,
+#         vae: AutoencoderKLCogVideoX,
+#         transformer: CogVideoXTransformer3DModelTracking,
+#         scheduler: Union[CogVideoXDDIMScheduler, CogVideoXDPMScheduler],
+#     ):
+#         super().__init__(tokenizer, text_encoder, vae, transformer, scheduler)
+#         
+#         if not isinstance(self.transformer, CogVideoXTransformer3DModelTracking):
+#             raise ValueError("The transformer in this pipeline must be of type CogVideoXTransformer3DModelTracking")
+#
+#     @torch.no_grad()
+#     def __call__(
+#         self,
+#         prompt: Optional[Union[str, List[str]]] = None,
+#         negative_prompt: Optional[Union[str, List[str]]] = None,
+#         height: int = 480,
+#         width: int = 720,
+#         num_frames: int = 49,
+#         num_inference_steps: int = 50,
+#         timesteps: Optional[List[int]] = None,
+#         guidance_scale: float = 6,
+#         use_dynamic_cfg: bool = False,
+#         num_videos_per_prompt: int = 1,
+#         eta: float = 0.0,
+#         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
+#         latents: Optional[torch.FloatTensor] = None,
+#         prompt_embeds: Optional[torch.FloatTensor] = None,
+#         negative_prompt_embeds: Optional[torch.FloatTensor] = None,
+#         output_type: str = "pil",
+#         return_dict: bool = True,
+#         attention_kwargs: Optional[Dict[str, Any]] = None,
+#         callback_on_step_end: Optional[
+#             Union[Callable[[int, int, Dict], None], PipelineCallback, MultiPipelineCallbacks]
+#         ] = None,
+#         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+#         max_sequence_length: int = 226,
+#         tracking_maps: Optional[torch.Tensor] = None,
+#     ) -> Union[CogVideoXPipelineOutput, Tuple]:
+#         if isinstance(callback_on_step_end, (PipelineCallback, MultiPipelineCallbacks)):
+#             callback_on_step_end_tensor_inputs = callback_on_step_end.tensor_inputs
+#
+#         num_videos_per_prompt = 1
+#
+#         self.check_inputs(
+#             prompt,
+#             height,
+#             width,
+#             negative_prompt,
+#             callback_on_step_end_tensor_inputs,
+#             prompt_embeds,
+#             negative_prompt_embeds,
+#         )
+#         self._guidance_scale = guidance_scale
+#         self._attention_kwargs = attention_kwargs
+#         self._interrupt = False
+#
+#         if prompt is not None and isinstance(prompt, str):
+#             batch_size = 1
+#         elif prompt is not None and isinstance(prompt, list):
+#             batch_size = len(prompt)
+#         else:
+#             batch_size = prompt_embeds.shape[0]
+#
+#         device = self._execution_device
+#
+#         do_classifier_free_guidance = guidance_scale > 1.0
+#
+#         prompt_embeds, negative_prompt_embeds = self.encode_prompt(
+#             prompt,
+#             negative_prompt,
+#             do_classifier_free_guidance,
+#             num_videos_per_prompt=num_videos_per_prompt,
+#             prompt_embeds=prompt_embeds,
+#             negative_prompt_embeds=negative_prompt_embeds,
+#             max_sequence_length=max_sequence_length,
+#             device=device,
+#         )
+#         if do_classifier_free_guidance:
+#             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
+#
+#         timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, device, timesteps)
+#         self._num_timesteps = len(timesteps)
+#
+#         latent_channels = self.transformer.config.in_channels
+#         latents = self.prepare_latents(
+#             batch_size * num_videos_per_prompt,
+#             latent_channels,
+#             num_frames,
+#             height,
+#             width,
+#             prompt_embeds.dtype,
+#             device,
+#             generator,
+#             latents,
+#         )
+#
+#         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+#
+#         image_rotary_emb = (
+#             self._prepare_rotary_positional_embeddings(height, width, latents.size(1), device)
+#             if self.transformer.config.use_rotary_positional_embeddings
+#             else None
+#         )
+#
+#         num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
+#
+#         with self.progress_bar(total=num_inference_steps) as progress_bar:
+#             old_pred_original_sample = None
+#             for i, t in enumerate(timesteps):
+#                 if self.interrupt:
+#                     continue
+#
+#                 latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+#                 tracking_maps_latent = torch.cat([tracking_maps] * 2) if do_classifier_free_guidance else tracking_maps
+#                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+#
+#                 timestep = t.expand(latent_model_input.shape[0])
+#
+#                 noise_pred = self.transformer(
+#                     hidden_states=latent_model_input,
+#                     encoder_hidden_states=prompt_embeds,
+#                     timestep=timestep,
+#                     image_rotary_emb=image_rotary_emb,
+#                     attention_kwargs=attention_kwargs,
+#                     tracking_maps=tracking_maps_latent,
+#                     return_dict=False,
+#                 )[0]
+#                 noise_pred = noise_pred.float()
+#
+#                 if use_dynamic_cfg:
+#                     self._guidance_scale = 1 + guidance_scale * (
+#                         (1 - math.cos(math.pi * ((num_inference_steps - t.item()) / num_inference_steps) ** 5.0)) / 2
+#                     )
+#                 if do_classifier_free_guidance:
+#                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+#                     noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
+#
+#                 if not isinstance(self.scheduler, CogVideoXDPMScheduler):
+#                     latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
+#                 else:
+#                     latents, old_pred_original_sample = self.scheduler.step(
+#                         noise_pred,
+#                         old_pred_original_sample,
+#                         t,
+#                         timesteps[i - 1] if i > 0 else None,
+#                         latents,
+#                         **extra_step_kwargs,
+#                         return_dict=False,
+#                     )
+#                 latents = latents.to(prompt_embeds.dtype)
+#
+#                 if callback_on_step_end is not None:
+#                     callback_kwargs = {}
+#                     for k in callback_on_step_end_tensor_inputs:
+#                         callback_kwargs[k] = locals()[k]
+#                     callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
+#
+#                     latents = callback_outputs.pop("latents", latents)
+#                     prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
+#                     negative_prompt_embeds = callback_outputs.pop("negative_prompt_embeds", negative_prompt_embeds)
+#
+#                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
+#                     progress_bar.update()
+#
+#         if not output_type == "latent":
+#             video = self.decode_latents(latents)
+#             video = self.video_processor.postprocess_video(video=video, output_type=output_type)
+#         else:
+#             video = latents
+#
+#         self.maybe_free_model_hooks()
+#
+#         if not return_dict:
+#             return (video,)
+#         return CogVideoXPipelineOutput(frames=video)
 
 class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, DiffusionPipeline):
 
@@ -841,215 +904,215 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
 
         return CogVideoXPipelineOutput(frames=video)
 
-class CogVideoXVideoToVideoPipelineTracking(CogVideoXVideoToVideoPipeline, DiffusionPipeline):
-
-    def __init__(
-        self,
-        tokenizer: T5Tokenizer,
-        text_encoder: T5EncoderModel,
-        vae: AutoencoderKLCogVideoX,
-        transformer: CogVideoXTransformer3DModelTracking,
-        scheduler: Union[CogVideoXDDIMScheduler, CogVideoXDPMScheduler],
-    ):
-        super().__init__(tokenizer, text_encoder, vae, transformer, scheduler)
-        
-        if not isinstance(self.transformer, CogVideoXTransformer3DModelTracking):
-            raise ValueError("The transformer in this pipeline must be of type CogVideoXTransformer3DModelTracking")
-            
-    @torch.no_grad()
-    def __call__(
-        self,
-        video: List[Image.Image] = None,
-        prompt: Optional[Union[str, List[str]]] = None,
-        negative_prompt: Optional[Union[str, List[str]]] = None,
-        height: int = 480,
-        width: int = 720,
-        num_inference_steps: int = 50,
-        timesteps: Optional[List[int]] = None,
-        strength: float = 0.8,
-        guidance_scale: float = 6,
-        use_dynamic_cfg: bool = False,
-        num_videos_per_prompt: int = 1,
-        eta: float = 0.0,
-        generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
-        latents: Optional[torch.FloatTensor] = None,
-        prompt_embeds: Optional[torch.FloatTensor] = None,
-        negative_prompt_embeds: Optional[torch.FloatTensor] = None,
-        output_type: str = "pil",
-        return_dict: bool = True,
-        attention_kwargs: Optional[Dict[str, Any]] = None,
-        callback_on_step_end: Optional[
-            Union[Callable[[int, int, Dict], None], PipelineCallback, MultiPipelineCallbacks]
-        ] = None,
-        callback_on_step_end_tensor_inputs: List[str] = ["latents"],
-        max_sequence_length: int = 226,
-        tracking_maps: Optional[torch.Tensor] = None,
-    ) -> Union[CogVideoXPipelineOutput, Tuple]:
-
-        if isinstance(callback_on_step_end, (PipelineCallback, MultiPipelineCallbacks)):
-            callback_on_step_end_tensor_inputs = callback_on_step_end.tensor_inputs
-
-        num_videos_per_prompt = 1
-
-        # 1. Check inputs. Raise error if not correct
-        self.check_inputs(
-            prompt=prompt,
-            height=height,
-            width=width,
-            strength=strength,
-            negative_prompt=negative_prompt,
-            callback_on_step_end_tensor_inputs=callback_on_step_end_tensor_inputs,
-            video=video,
-            latents=latents,
-            prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds,
-        )
-        self._guidance_scale = guidance_scale
-        self._attention_kwargs = attention_kwargs
-        self._interrupt = False
-
-        # 2. Default call parameters
-        if prompt is not None and isinstance(prompt, str):
-            batch_size = 1
-        elif prompt is not None and isinstance(prompt, list):
-            batch_size = len(prompt)
-        else:
-            batch_size = prompt_embeds.shape[0]
-
-        device = self._execution_device
-
-        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
-        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
-        # corresponds to doing no classifier free guidance.
-        do_classifier_free_guidance = guidance_scale > 1.0
-
-        # 3. Encode input prompt
-        prompt_embeds, negative_prompt_embeds = self.encode_prompt(
-            prompt,
-            negative_prompt,
-            do_classifier_free_guidance,
-            num_videos_per_prompt=num_videos_per_prompt,
-            prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds,
-            max_sequence_length=max_sequence_length,
-            device=device,
-        )
-        if do_classifier_free_guidance:
-            prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
-
-        # 4. Prepare timesteps
-        timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, device, timesteps)
-        timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, timesteps, strength, device)
-        latent_timestep = timesteps[:1].repeat(batch_size * num_videos_per_prompt)
-        self._num_timesteps = len(timesteps)
-
-        # 5. Prepare latents
-        if latents is None:
-            video = self.video_processor.preprocess_video(video, height=height, width=width)
-            video = video.to(device=device, dtype=prompt_embeds.dtype)
-
-        latent_channels = self.transformer.config.in_channels
-        latents = self.prepare_latents(
-            video,
-            batch_size * num_videos_per_prompt,
-            latent_channels,
-            height,
-            width,
-            prompt_embeds.dtype,
-            device,
-            generator,
-            latents,
-            latent_timestep,
-        )
-
-        # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
-        extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
-
-        # 7. Create rotary embeds if required
-        image_rotary_emb = (
-            self._prepare_rotary_positional_embeddings(height, width, latents.size(1), device)
-            if self.transformer.config.use_rotary_positional_embeddings
-            else None
-        )
-
-        # 8. Denoising loop
-        num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
-
-        with self.progress_bar(total=num_inference_steps) as progress_bar:
-            # for DPM-solver++
-            old_pred_original_sample = None
-            for i, t in enumerate(timesteps):
-                if self.interrupt:
-                    continue
-
-                latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
-                tracking_maps_input = torch.cat([tracking_maps] * 2) if do_classifier_free_guidance else tracking_maps
-                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
-
-                # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
-                timestep = t.expand(latent_model_input.shape[0])
-
-                # predict noise model_output
-                noise_pred = self.transformer(
-                    hidden_states=latent_model_input,
-                    encoder_hidden_states=prompt_embeds,
-                    timestep=timestep,
-                    image_rotary_emb=image_rotary_emb,
-                    attention_kwargs=attention_kwargs,
-                    tracking_maps=tracking_maps_input,
-                    return_dict=False,
-                )[0]
-                noise_pred = noise_pred.float()
-
-                # perform guidance
-                if use_dynamic_cfg:
-                    self._guidance_scale = 1 + guidance_scale * (
-                        (1 - math.cos(math.pi * ((num_inference_steps - t.item()) / num_inference_steps) ** 5.0)) / 2
-                    )
-                if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
-
-                # compute the previous noisy sample x_t -> x_t-1
-                if not isinstance(self.scheduler, CogVideoXDPMScheduler):
-                    latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
-                else:
-                    latents, old_pred_original_sample = self.scheduler.step(
-                        noise_pred,
-                        old_pred_original_sample,
-                        t,
-                        timesteps[i - 1] if i > 0 else None,
-                        latents,
-                        **extra_step_kwargs,
-                        return_dict=False,
-                    )
-                latents = latents.to(prompt_embeds.dtype)
-
-                # call the callback, if provided
-                if callback_on_step_end is not None:
-                    callback_kwargs = {}
-                    for k in callback_on_step_end_tensor_inputs:
-                        callback_kwargs[k] = locals()[k]
-                    callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
-
-                    latents = callback_outputs.pop("latents", latents)
-                    prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
-                    negative_prompt_embeds = callback_outputs.pop("negative_prompt_embeds", negative_prompt_embeds)
-
-                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
-                    progress_bar.update()
-
-        if not output_type == "latent":
-            video = self.decode_latents(latents)
-            video = self.video_processor.postprocess_video(video=video, output_type=output_type)
-        else:
-            video = latents
-
-        # Offload all models
-        self.maybe_free_model_hooks()
-
-        if not return_dict:
-            return (video,)
-
-        return CogVideoXPipelineOutput(frames=video)
+# class CogVideoXVideoToVideoPipelineTracking(CogVideoXVideoToVideoPipeline, DiffusionPipeline):
+#
+#     def __init__(
+#         self,
+#         tokenizer: T5Tokenizer,
+#         text_encoder: T5EncoderModel,
+#         vae: AutoencoderKLCogVideoX,
+#         transformer: CogVideoXTransformer3DModelTracking,
+#         scheduler: Union[CogVideoXDDIMScheduler, CogVideoXDPMScheduler],
+#     ):
+#         super().__init__(tokenizer, text_encoder, vae, transformer, scheduler)
+#         
+#         if not isinstance(self.transformer, CogVideoXTransformer3DModelTracking):
+#             raise ValueError("The transformer in this pipeline must be of type CogVideoXTransformer3DModelTracking")
+#             
+#     @torch.no_grad()
+#     def __call__(
+#         self,
+#         video: List[Image.Image] = None,
+#         prompt: Optional[Union[str, List[str]]] = None,
+#         negative_prompt: Optional[Union[str, List[str]]] = None,
+#         height: int = 480,
+#         width: int = 720,
+#         num_inference_steps: int = 50,
+#         timesteps: Optional[List[int]] = None,
+#         strength: float = 0.8,
+#         guidance_scale: float = 6,
+#         use_dynamic_cfg: bool = False,
+#         num_videos_per_prompt: int = 1,
+#         eta: float = 0.0,
+#         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
+#         latents: Optional[torch.FloatTensor] = None,
+#         prompt_embeds: Optional[torch.FloatTensor] = None,
+#         negative_prompt_embeds: Optional[torch.FloatTensor] = None,
+#         output_type: str = "pil",
+#         return_dict: bool = True,
+#         attention_kwargs: Optional[Dict[str, Any]] = None,
+#         callback_on_step_end: Optional[
+#             Union[Callable[[int, int, Dict], None], PipelineCallback, MultiPipelineCallbacks]
+#         ] = None,
+#         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+#         max_sequence_length: int = 226,
+#         tracking_maps: Optional[torch.Tensor] = None,
+#     ) -> Union[CogVideoXPipelineOutput, Tuple]:
+#
+#         if isinstance(callback_on_step_end, (PipelineCallback, MultiPipelineCallbacks)):
+#             callback_on_step_end_tensor_inputs = callback_on_step_end.tensor_inputs
+#
+#         num_videos_per_prompt = 1
+#
+#         # 1. Check inputs. Raise error if not correct
+#         self.check_inputs(
+#             prompt=prompt,
+#             height=height,
+#             width=width,
+#             strength=strength,
+#             negative_prompt=negative_prompt,
+#             callback_on_step_end_tensor_inputs=callback_on_step_end_tensor_inputs,
+#             video=video,
+#             latents=latents,
+#             prompt_embeds=prompt_embeds,
+#             negative_prompt_embeds=negative_prompt_embeds,
+#         )
+#         self._guidance_scale = guidance_scale
+#         self._attention_kwargs = attention_kwargs
+#         self._interrupt = False
+#
+#         # 2. Default call parameters
+#         if prompt is not None and isinstance(prompt, str):
+#             batch_size = 1
+#         elif prompt is not None and isinstance(prompt, list):
+#             batch_size = len(prompt)
+#         else:
+#             batch_size = prompt_embeds.shape[0]
+#
+#         device = self._execution_device
+#
+#         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+#         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+#         # corresponds to doing no classifier free guidance.
+#         do_classifier_free_guidance = guidance_scale > 1.0
+#
+#         # 3. Encode input prompt
+#         prompt_embeds, negative_prompt_embeds = self.encode_prompt(
+#             prompt,
+#             negative_prompt,
+#             do_classifier_free_guidance,
+#             num_videos_per_prompt=num_videos_per_prompt,
+#             prompt_embeds=prompt_embeds,
+#             negative_prompt_embeds=negative_prompt_embeds,
+#             max_sequence_length=max_sequence_length,
+#             device=device,
+#         )
+#         if do_classifier_free_guidance:
+#             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
+#
+#         # 4. Prepare timesteps
+#         timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, device, timesteps)
+#         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, timesteps, strength, device)
+#         latent_timestep = timesteps[:1].repeat(batch_size * num_videos_per_prompt)
+#         self._num_timesteps = len(timesteps)
+#
+#         # 5. Prepare latents
+#         if latents is None:
+#             video = self.video_processor.preprocess_video(video, height=height, width=width)
+#             video = video.to(device=device, dtype=prompt_embeds.dtype)
+#
+#         latent_channels = self.transformer.config.in_channels
+#         latents = self.prepare_latents(
+#             video,
+#             batch_size * num_videos_per_prompt,
+#             latent_channels,
+#             height,
+#             width,
+#             prompt_embeds.dtype,
+#             device,
+#             generator,
+#             latents,
+#             latent_timestep,
+#         )
+#
+#         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
+#         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+#
+#         # 7. Create rotary embeds if required
+#         image_rotary_emb = (
+#             self._prepare_rotary_positional_embeddings(height, width, latents.size(1), device)
+#             if self.transformer.config.use_rotary_positional_embeddings
+#             else None
+#         )
+#
+#         # 8. Denoising loop
+#         num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
+#
+#         with self.progress_bar(total=num_inference_steps) as progress_bar:
+#             # for DPM-solver++
+#             old_pred_original_sample = None
+#             for i, t in enumerate(timesteps):
+#                 if self.interrupt:
+#                     continue
+#
+#                 latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+#                 tracking_maps_input = torch.cat([tracking_maps] * 2) if do_classifier_free_guidance else tracking_maps
+#                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+#
+#                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
+#                 timestep = t.expand(latent_model_input.shape[0])
+#
+#                 # predict noise model_output
+#                 noise_pred = self.transformer(
+#                     hidden_states=latent_model_input,
+#                     encoder_hidden_states=prompt_embeds,
+#                     timestep=timestep,
+#                     image_rotary_emb=image_rotary_emb,
+#                     attention_kwargs=attention_kwargs,
+#                     tracking_maps=tracking_maps_input,
+#                     return_dict=False,
+#                 )[0]
+#                 noise_pred = noise_pred.float()
+#
+#                 # perform guidance
+#                 if use_dynamic_cfg:
+#                     self._guidance_scale = 1 + guidance_scale * (
+#                         (1 - math.cos(math.pi * ((num_inference_steps - t.item()) / num_inference_steps) ** 5.0)) / 2
+#                     )
+#                 if do_classifier_free_guidance:
+#                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+#                     noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
+#
+#                 # compute the previous noisy sample x_t -> x_t-1
+#                 if not isinstance(self.scheduler, CogVideoXDPMScheduler):
+#                     latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
+#                 else:
+#                     latents, old_pred_original_sample = self.scheduler.step(
+#                         noise_pred,
+#                         old_pred_original_sample,
+#                         t,
+#                         timesteps[i - 1] if i > 0 else None,
+#                         latents,
+#                         **extra_step_kwargs,
+#                         return_dict=False,
+#                     )
+#                 latents = latents.to(prompt_embeds.dtype)
+#
+#                 # call the callback, if provided
+#                 if callback_on_step_end is not None:
+#                     callback_kwargs = {}
+#                     for k in callback_on_step_end_tensor_inputs:
+#                         callback_kwargs[k] = locals()[k]
+#                     callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
+#
+#                     latents = callback_outputs.pop("latents", latents)
+#                     prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
+#                     negative_prompt_embeds = callback_outputs.pop("negative_prompt_embeds", negative_prompt_embeds)
+#
+#                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
+#                     progress_bar.update()
+#
+#         if not output_type == "latent":
+#             video = self.decode_latents(latents)
+#             video = self.video_processor.postprocess_video(video=video, output_type=output_type)
+#         else:
+#             video = latents
+#
+#         # Offload all models
+#         self.maybe_free_model_hooks()
+#
+#         if not return_dict:
+#             return (video,)
+#
+#         return CogVideoXPipelineOutput(frames=video)
 

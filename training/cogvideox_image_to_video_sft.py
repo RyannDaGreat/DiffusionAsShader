@@ -1043,9 +1043,11 @@ def main(args):
                     model_output = transformer(
                         hidden_states=noisy_model_input,
                         encoder_hidden_states=prompt_embeds,
+
                         tracking_maps=tracking_latents,
                         counter_tracking_maps=counter_tracking_latents,
                         counter_video_maps=counter_video_latents,
+
                         timestep=timesteps,
                         image_rotary_emb=image_rotary_emb,
                         return_dict=False,
@@ -1250,14 +1252,15 @@ def main(args):
 
         # Final test inference
         if args.tracking_column is None:
-            pipe = CogVideoXImageToVideoPipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
-                transformer=unwrap_model(transformer),
-                scheduler=scheduler,
-                revision=args.revision,
-                variant=args.variant,
-                torch_dtype=weight_dtype,
-            )
+            assert False
+            # pipe = CogVideoXImageToVideoPipeline.from_pretrained(
+            #     args.pretrained_model_name_or_path,
+            #     transformer=unwrap_model(transformer),
+            #     scheduler=scheduler,
+            #     revision=args.revision,
+            #     variant=args.variant,
+            #     torch_dtype=weight_dtype,
+            # )
         else:
             pipe = CogVideoXImageToVideoPipelineTracking.from_pretrained(
                 args.pretrained_model_name_or_path,
