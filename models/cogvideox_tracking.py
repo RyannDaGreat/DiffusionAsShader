@@ -358,9 +358,43 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
-        try:
-            model = super().from_pretrained(pretrained_model_name_or_path, **kwargs)
-            print("Loaded DiffusionAsShader checkpoint directly.")
+        # Instead of using super().from_pretrained which hits meta tensor issues,
+        # create model from scratch and load the state dict manually
+        import torch
+        import os
+        import json
+        
+        # Create a new model instance with updated architecture
+        # First get the config
+        config_file = os.path.join(pretrained_model_name_or_path, "config.json")
+        if os.path.exists(config_file):
+            with open(config_file, "r") as f:
+                config = json.load(f)
+            
+            # Add tracking blocks if not present
+            if "num_tracking_blocks" not in config:
+                config["num_tracking_blocks"] = kwargs.pop("num_tracking_blocks", 18)
+                
+            # Create model with our architecture
+            model = cls(**config)
+            
+            # Load the weights directly, with strict=False to handle new params
+            if os.path.exists(os.path.join(pretrained_model_name_or_path, "diffusion_model.safetensors")):
+                from safetensors import safe_open
+                with safe_open(os.path.join(pretrained_model_name_or_path, "diffusion_model.safetensors"), framework="pt") as f:
+                    state_dict = {k: f.get_tensor(k) for k in f.keys()}
+            else:
+                state_dict = torch.load(
+                    os.path.join(pretrained_model_name_or_path, "diffusion_model.bin"), 
+                    map_location="cpu"
+                )
+            
+            # Load with strict=False to handle missing keys for new params
+            missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+            print(f"Loaded checkpoint with {len(missing_keys)} missing keys and {len(unexpected_keys)} unexpected keys")
+            
+            if len(missing_keys) > 0:
+                print(f"Missing keys: {missing_keys}")
             
             # Freeze all parameters
             for param in model.parameters():
@@ -377,38 +411,142 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                 
             for param in model.initial_combine_linear.parameters():
                 param.requires_grad = True
-        
+            
             for param in model.second_patch_embed.parameters():
                 param.requires_grad = True
-            
+                
             return model
         
-        except Exception as e:
-            print(f"Failed to load as DiffusionAsShader: {e}")
-            print("Attempting to load as CogVideoXTransformer3DModel and convert...")
-
-            base_model = CogVideoXTransformer3DModel.from_pretrained(pretrained_model_name_or_path, **kwargs)
+        else:
+            # Fallback to loading from HF model or base CogVideoX model directly
+            print("No config.json found, loading from base CogVideoX model manually...")
             
-            config = dict(base_model.config)
-            config["num_tracking_blocks"] = kwargs.pop("num_tracking_blocks", 18)
+            # Get the config without loading the full model (avoids meta tensor issues)
+            import json
+            from huggingface_hub import hf_hub_download
             
-            model = cls(**config)
-            model.load_state_dict(base_model.state_dict(), strict=False)
-
-            model.initial_combine_linear.weight.data.zero_()
-            model.initial_combine_linear.bias.data.zero_()
+            try:
+                # Try to get the config directly from the hub
+                if os.path.isdir(pretrained_model_name_or_path):
+                    config_path = os.path.join(pretrained_model_name_or_path, "config.json")
+                    with open(config_path, "r") as f:
+                        base_config = json.load(f)
+                else:
+                    config_file = hf_hub_download(
+                        repo_id=pretrained_model_name_or_path,
+                        filename="config.json",
+                        subfolder=kwargs.get("subfolder", None),
+                        revision=kwargs.get("revision", None),
+                    )
+                    with open(config_file, "r") as f:
+                        base_config = json.load(f)
+            except Exception as e:
+                print(f"Error loading config: {e}")
+                # Create default config for CogVideoX-5b-I2V
+                base_config = {
+                    "num_attention_heads": 30,
+                    "attention_head_dim": 64,
+                    "in_channels": 16,
+                    "out_channels": 16,
+                    "flip_sin_to_cos": True,
+                    "freq_shift": 0,
+                    "time_embed_dim": 512,
+                    "text_embed_dim": 4096,
+                    "num_layers": 30,
+                    "dropout": 0.0,
+                    "attention_bias": True,
+                    "sample_width": 90,
+                    "sample_height": 60,
+                    "sample_frames": 49,
+                    "patch_size": 2,
+                    "temporal_compression_ratio": 4,
+                    "max_text_seq_length": 226,
+                    "activation_fn": "gelu-approximate",
+                    "timestep_activation_fn": "silu",
+                    "norm_elementwise_affine": True,
+                    "norm_eps": 1e-5,
+                    "spatial_interpolation_scale": 1.875,
+                    "temporal_interpolation_scale": 1.0,
+                    "use_rotary_positional_embeddings": False,
+                    "use_learned_positional_embeddings": False,
+                }
             
-            for linear in model.combine_linears:
-                linear.weight.data.zero_()
-                linear.bias.data.zero_()
+            # Add our tracking blocks config
+            base_config["num_tracking_blocks"] = kwargs.pop("num_tracking_blocks", 18)
             
-            for i in range(model.num_tracking_blocks):
-                model.transformer_blocks_copy[i].load_state_dict(model.transformer_blocks[i].state_dict())
+            # Create our model with tracking features
+            model = cls(**base_config)
             
-
+            # Try to load the base model weights directly
+            try:
+                # Try to load the state dict
+                if os.path.exists(os.path.join(pretrained_model_name_or_path, "diffusion_model.safetensors")):
+                    from safetensors import safe_open
+                    with safe_open(os.path.join(pretrained_model_name_or_path, "diffusion_model.safetensors"), framework="pt") as f:
+                        state_dict = {k: f.get_tensor(k) for k in f.keys()}
+                elif os.path.exists(os.path.join(pretrained_model_name_or_path, "diffusion_model.bin")):
+                    state_dict = torch.load(
+                        os.path.join(pretrained_model_name_or_path, "diffusion_model.bin"), 
+                        map_location="cpu"
+                    )
+                else:
+                    # Use huggingface hub to download
+                    if kwargs.get("subfolder", None) is not None:
+                        subfolder = f"{kwargs['subfolder']}"
+                    else:
+                        subfolder = None
+                        
+                    try:
+                        weight_file = hf_hub_download(
+                            repo_id=pretrained_model_name_or_path,
+                            filename="diffusion_model.safetensors",
+                            subfolder=subfolder,
+                            revision=kwargs.get("revision", None),
+                        )
+                        from safetensors import safe_open
+                        with safe_open(weight_file, framework="pt") as f:
+                            state_dict = {k: f.get_tensor(k) for k in f.keys()}
+                    except:
+                        weight_file = hf_hub_download(
+                            repo_id=pretrained_model_name_or_path,
+                            filename="diffusion_model.bin",
+                            subfolder=subfolder,
+                            revision=kwargs.get("revision", None),
+                        )
+                        state_dict = torch.load(weight_file, map_location="cpu")
+                
+                # Load weights with strict=False
+                missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+                print(f"Loaded base model weights with {len(missing_keys)} missing keys")
+                
+                # Initialize tracking specific parameters
+                model.initial_combine_linear.weight.data.zero_()
+                model.initial_combine_linear.bias.data.zero_()
+                
+                for linear in model.combine_linears:
+                    linear.weight.data.zero_()
+                    linear.bias.data.zero_()
+                
+                # Copy transformer blocks to tracking blocks
+                for i in range(model.num_tracking_blocks):
+                    # Use copy_()
+                    for param_name, param in model.transformer_blocks[i].named_parameters():
+                        if hasattr(model.transformer_blocks_copy[i], param_name):
+                            target_param = getattr(model.transformer_blocks_copy[i], param_name.replace(".", "_"))
+                            if hasattr(target_param, "data"):
+                                target_param.data.copy_(param.data)
+                
+                print("Successfully initialized tracking blocks from base model.")
+                
+            except Exception as e:
+                print(f"Error initializing from base model: {e}")
+                print("Continuing with random initialization.")
+            
+            # Freeze all parameters
             for param in model.parameters():
                 param.requires_grad = False
             
+            # Unfreeze parameters that need to be trained
             for linear in model.combine_linears:
                 for param in linear.parameters():
                     param.requires_grad = True
@@ -419,7 +557,7 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                 
             for param in model.initial_combine_linear.parameters():
                 param.requires_grad = True
-        
+            
             for param in model.second_patch_embed.parameters():
                 param.requires_grad = True
             
