@@ -212,8 +212,8 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
             #
             encoder_hidden_states = "B Seq Dim",
             #
-            C=16,
-            CCC=16*3,
+            C=32,
+            CCC=32*3,
             #
             verbose='bold altbw white random blue',
         )
