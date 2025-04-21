@@ -31,11 +31,11 @@ rp.load_files(
     num_threads=100,
 )
 
-prompt            = [x.prompt.replace('\n',' ')     for x in samples]
-videos            = [x.video_480p49_path            for x in samples]
-trackings         = [x.video_dasTrackvid_path       for x in samples]
-counter_trackings = [x.cogxCounterVideo_dasTrackvid for x in samples]
-counter_videos    = [x.cogxCounterVideo             for x in samples]
+prompt            = [x.prompt.replace('\n',' ')          for x in samples]
+videos            = [x.video_480p49_path                 for x in samples]
+trackings         = [x.video_dasTrackvid_path            for x in samples]
+counter_trackings = [x.cogxCounterVideo_dasTrackvid_path for x in samples]
+counter_videos    = [x.cogxCounterVideo_path             for x in samples]
 
 prompt_path            = rp.save_file_lines(prompt           , "prompt.txt"           )
 videos_path            = rp.save_file_lines(videos           , "videos.txt"           )
