@@ -15,7 +15,8 @@ from diffusers.pipelines.cogvideo.pipeline_cogvideox_video2video import CogVideo
 from diffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
 from diffusers.pipelines.cogvideo.pipeline_cogvideox import retrieve_timesteps
 from transformers import T5EncoderModel, T5Tokenizer
-from diffusers.models import AutoencoderKLCogVideoX, CogVideoXTransformer3DModel, CogVideoXPatchEmbed
+from diffusers.models import AutoencoderKLCogVideoX, CogVideoXTransformer3DModel
+from diffusers.models.embeddings import CogVideoXPatchEmbed
 from diffusers.schedulers import CogVideoXDDIMScheduler, CogVideoXDPMScheduler
 from diffusers.pipelines import DiffusionPipeline   
 from diffusers.models.modeling_utils import ModelMixin
@@ -684,15 +685,23 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
         callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
         max_sequence_length: int = 226,
-        tracking_maps: torch.Tensor,
-        tracking_image: torch.Tensor,
-        counter_tracking_maps: torch.Tensor,
-        counter_tracking_image: torch.Tensor,
-        counter_video_maps: torch.Tensor,
-        counter_video_image: torch.Tensor,
+        tracking_maps: torch.Tensor=None,
+        tracking_image: torch.Tensor=None,
+        counter_tracking_maps: torch.Tensor=None,
+        counter_tracking_image: torch.Tensor=None,
+        counter_video_maps: torch.Tensor=None,
+        counter_video_image: torch.Tensor=None,
     ) -> Union[CogVideoXPipelineOutput, Tuple]:
         # Most of the implementation remains the same as the parent class
         # We will modify the parts that need to handle tracking_maps
+
+        assert tracking_maps is not None
+        assert tracking_image is not None
+        assert counter_tracking_maps is not None
+        assert counter_tracking_image is not None
+        assert counter_video_maps is not None
+        assert counter_video_image is not None
+
 
         # 1. Check inputs and set default values
         self.check_inputs(
