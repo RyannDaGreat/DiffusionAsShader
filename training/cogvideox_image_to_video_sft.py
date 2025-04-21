@@ -836,14 +836,15 @@ def main(args):
         transformer.eval()
 
         if args.tracking_column is None:
-            pipe = CogVideoXImageToVideoPipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
-                transformer=unwrap_model(transformer),
-                scheduler=scheduler,
-                revision=args.revision,
-                variant=args.variant,
-                torch_dtype=weight_dtype,
-            )
+            assert False
+            # pipe = CogVideoXImageToVideoPipeline.from_pretrained(
+            #     args.pretrained_model_name_or_path,
+            #     transformer=unwrap_model(transformer),
+            #     scheduler=scheduler,
+            #     revision=args.revision,
+            #     variant=args.variant,
+            #     torch_dtype=weight_dtype,
+            # )
         else:
             pipe = CogVideoXImageToVideoPipelineTracking.from_pretrained(
                 args.pretrained_model_name_or_path,

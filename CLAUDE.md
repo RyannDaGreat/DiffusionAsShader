@@ -14,6 +14,36 @@ DiffusionAsShader is a 3D-aware video diffusion model for versatile video genera
 
 DiffusionAsShader modifies the CogVideoX architecture by adding a parallel "tracking stream" that processes tracking maps and injects activations into the main content stream.
 
+### Input Tensors and Their Dimensions
+
+The model uses several key tensors as input:
+
+1. **image**:
+   - A single input image (e.g., the first frame of the desired video)
+   - Dimension: [B, C, H, W] (batch, channels, height, width)
+   - Purpose: Serves as the reference for the first frame of the generated video
+   - After encoding → **image_latents**
+
+2. **tracking_image**:
+   - The first frame of the tracking video
+   - Dimension: [B, C, H, W]
+   - Purpose: Serves as a reference/conditioning for the tracking motion
+   - After encoding → **tracking_image_latents**
+
+3. **tracking_maps**:
+   - The full tracking video showing motion paths (colored line visualization)
+   - Initial dimension: [B, T, C, H, W] (batch, time/frames, channels, height, width)
+   - After encoding: [B, F, C, H, W] (where C is the latent channels)
+   - Purpose: Provides the motion guidance for the generation process
+
+During the denoising loop, both streams follow the same pattern:
+- Main stream: `latent_model_input = torch.cat([latent_model_input, latent_image_input], dim=2)`
+- Tracking stream: `tracking_maps_input = torch.cat([tracking_maps_input, latents_tracking_image], dim=2)`
+
+This concatenation doubles the channel dimension for both streams, creating a parallel structure where:
+- The main stream processes noisy content latents conditioned on the first frame
+- The tracking stream processes tracking motion conditioned on the first tracking frame
+
 ### Key Model Parameters
 - Base model: CogVideoX-5b-I2V
 - Input channels: 16 channels for the transformer model (`in_channels` parameter)
