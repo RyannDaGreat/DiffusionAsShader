@@ -69,8 +69,10 @@ from diffusers.pipelines.cogvideo.pipeline_cogvideox_image2video import CogVideo
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(current_dir, '..'))
+rp.fansi_print("SYS PATH:"+rp.indentify(rp.line_join(sys.path)),'green green italic on dark light blue')
 from models.cogvideox_tracking import CogVideoXImageToVideoPipelineTracking
-from models.cogvideox_tracking import CogVideoXTransformer3DModelTracking, CogVideoXPipelineTracking
+from models.cogvideox_tracking import CogVideoXTransformer3DModelTracking
+# from models.cogvideox_tracking import CogVideoXPipelineTracking
 
 logger = get_logger(__name__)
 
@@ -152,7 +154,7 @@ Please adhere to the licensing terms as described [here](https://huggingface.co/
 
 def log_validation(
     accelerator: Accelerator,
-    pipe: Union[CogVideoXPipeline, CogVideoXPipelineTracking],
+    pipe: Union[CogVideoXPipeline],
     vae: Union[AutoencoderKLCogVideoX, None],
     dataset: Union[VideoDatasetWithResizingTracking, None],
     args: Dict[str, Any],
