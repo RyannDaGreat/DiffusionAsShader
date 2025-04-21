@@ -62,10 +62,26 @@ def _get_dataset_args(parser: argparse.ArgumentParser) -> None:
         help="The column of the dataset containing the tracking map for each video. Or, the name of the file in `--data_root` folder containing the line-separated tracking maps.",
     )
     parser.add_argument(
+        "--counter_tracking_column",
+        type=str,
+    )
+    parser.add_argument(
+        "--counter_video_column",
+        type=str,
+    )
+    parser.add_argument(
         "--tracking_map_path",
         type=str,
         default=None,
         help="Path to the tracking map video.",
+    )
+    parser.add_argument(
+        "--counter_tracking_map_path",
+        type=str,
+    )
+    parser.add_argument(
+        "--counter_video_map_path",
+        type=str,
     )
     parser.add_argument(
         "--num_tracking_blocks",
