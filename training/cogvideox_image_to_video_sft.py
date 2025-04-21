@@ -165,7 +165,9 @@ def log_validation(
         f"Running validation... \n Generating {args.num_validation_videos} videos with prompt: {pipeline_args['prompt']}."
     )
 
-    tracking_map_path = pipeline_args.pop("tracking_map_path", None)
+    tracking_map_path         = pipeline_args.pop("tracking_map_path"        , None)
+    counter_tracking_map_path = pipeline_args.pop("counter_tracking_map_path", None)
+    counter_video_map_path    = pipeline_args.pop("counter_video_map_path"   , None)
 
     try:
         tracking_maps = pipeline_args.pop("tracking_maps", None)
@@ -186,6 +188,7 @@ def log_validation(
             ]
         )
 
+
         tracking_map_path = Path(tracking_map_path)
         tracking_reader = decord.VideoReader(uri=tracking_map_path.as_posix())
         frame_indices = list(range(0, len(tracking_reader)))
@@ -194,10 +197,10 @@ def log_validation(
         tracking_frames = tracking_frames.permute(0, 3, 1, 2).contiguous()
         tracking_frames_resized = torch.stack([resize(tracking_frame, nearest_res) for tracking_frame in tracking_frames], dim=0)
         tracking_frames = torch.stack([video_transforms(tracking_frame) for tracking_frame in tracking_frames_resized], dim=0)
-
+        #
         tracking_image = tracking_frames[:1].clone()
         pipeline_args["tracking_image"] = tracking_image
-        
+        #        
         # vae encode tracking_frames from path
         with torch.no_grad():
             tracking_frames = tracking_frames.unsqueeze(0).to(device=accelerator.device, dtype=accelerator.unwrap_model(vae).dtype)
@@ -207,9 +210,56 @@ def log_validation(
             tracking_maps = tracking_maps.permute(0, 2, 1, 3, 4)  # to [B, F, C, H, W]
             tracking_maps = tracking_maps.to(memory_format=torch.contiguous_format, dtype=accelerator.unwrap_model(vae).dtype)
 
+
+        counter_tracking_map_path = Path(counter_tracking_map_path)
+        counter_tracking_reader = decord.VideoReader(uri=counter_tracking_map_path.as_posix())
+        frame_indices = list(range(0, len(counter_tracking_reader)))
+        counter_tracking_frames = counter_tracking_reader.get_batch(frame_indices)
+        nearest_res = dataset._find_nearest_resolution(counter_tracking_frames.shape[2], counter_tracking_frames.shape[3])
+        counter_tracking_frames = counter_tracking_frames.permute(0, 3, 1, 2).contiguous()
+        counter_tracking_frames_resized = torch.stack([resize(counter_tracking_frame, nearest_res) for counter_tracking_frame in counter_tracking_frames], dim=0)
+        counter_tracking_frames = torch.stack([video_transforms(counter_tracking_frame) for counter_tracking_frame in counter_tracking_frames_resized], dim=0)
+        #
+        counter_tracking_image = counter_tracking_frames[:1].clone()
+        pipeline_args["counter_tracking_image"] = counter_tracking_image
+        #        
+        # vae encode counter_tracking_frames from path
+        with torch.no_grad():
+            counter_tracking_frames = counter_tracking_frames.unsqueeze(0).to(device=accelerator.device, dtype=accelerator.unwrap_model(vae).dtype)
+            counter_tracking_frames = counter_tracking_frames.permute(0, 2, 1, 3, 4)  # to [B, C, F, H, W]
+            counter_tracking_latent_dist = vae.encode(counter_tracking_frames).latent_dist
+            counter_tracking_maps = counter_tracking_latent_dist.sample() * vae.config.scaling_factor
+            counter_tracking_maps = counter_tracking_maps.permute(0, 2, 1, 3, 4)  # to [B, F, C, H, W]
+            counter_tracking_maps = counter_tracking_maps.to(memory_format=torch.contiguous_format, dtype=accelerator.unwrap_model(vae).dtype)
+
+
+        counter_video_map_path = Path(counter_video_map_path)
+        counter_video_reader = decord.VideoReader(uri=counter_video_map_path.as_posix())
+        frame_indices = list(range(0, len(counter_video_reader)))
+        counter_video_frames = counter_video_reader.get_batch(frame_indices)
+        nearest_res = dataset._find_nearest_resolution(counter_video_frames.shape[2], counter_video_frames.shape[3])
+        counter_video_frames = counter_video_frames.permute(0, 3, 1, 2).contiguous()
+        counter_video_frames_resized = torch.stack([resize(counter_video_frame, nearest_res) for counter_video_frame in counter_video_frames], dim=0)
+        counter_video_frames = torch.stack([video_transforms(counter_video_frame) for counter_video_frame in counter_video_frames_resized], dim=0)
+        #
+        counter_video_image = counter_video_frames[:1].clone()
+        pipeline_args["counter_video_image"] = counter_video_image
+        #        
+        # vae encode counter_video_frames from path
+        with torch.no_grad():
+            counter_video_frames = counter_video_frames.unsqueeze(0).to(device=accelerator.device, dtype=accelerator.unwrap_model(vae).dtype)
+            counter_video_frames = counter_video_frames.permute(0, 2, 1, 3, 4)  # to [B, C, F, H, W]
+            counter_video_latent_dist = vae.encode(counter_video_frames).latent_dist
+            counter_video_maps = counter_video_latent_dist.sample() * vae.config.scaling_factor
+            counter_video_maps = counter_video_maps.permute(0, 2, 1, 3, 4)  # to [B, F, C, H, W]
+            counter_video_maps = counter_video_maps.to(memory_format=torch.contiguous_format, dtype=accelerator.unwrap_model(vae).dtype)
+
+
     pipe = pipe.to(accelerator.device)
 
-    pipeline_args["tracking_maps"] = tracking_maps
+    pipeline_args["tracking_maps"        ] = tracking_maps
+    pipeline_args["counter_tracking_maps"] = counter_tracking_maps
+    pipeline_args["counter_video_maps"   ] = counter_video_maps
 
     # run inference
     generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
@@ -399,13 +449,14 @@ def main(args):
     ##MARK
     load_dtype = torch.bfloat16 if "5b" in args.pretrained_model_name_or_path.lower() else torch.float16
     if not args.tracking_column:
-        transformer = CogVideoXTransformer3DModel.from_pretrained(
-            args.pretrained_model_name_or_path,
-            subfolder="transformer",
-            torch_dtype=load_dtype,
-            revision=args.revision,
-            variant=args.variant,
-        )
+        assert False, args
+        # transformer = CogVideoXTransformer3DModel.from_pretrained(
+        #     args.pretrained_model_name_or_path,
+        #     subfolder="transformer",
+        #     torch_dtype=load_dtype,
+        #     revision=args.revision,
+        #     variant=args.variant,
+        # )
     else:
         transformer = CogVideoXTransformer3DModelTracking.from_pretrained(
             args.pretrained_model_name_or_path,
@@ -1025,10 +1076,10 @@ def main(args):
                 # Add noise to the model input according to the noise magnitude at each timestep
                 # (this is the forward diffusion process)
                 noisy_video_latents = scheduler.add_noise(video_latents, noise, timesteps)
-                noisy_model_input = torch.cat([noisy_video_latents, image_latents], dim=2)
-                tracking_latents = torch.cat([tracking_maps, tracking_image_latents], dim=2)
+                noisy_model_input        = torch.cat([noisy_video_latents  , image_latents                 ], dim=2)
+                tracking_latents         = torch.cat([tracking_maps        , tracking_image_latents        ], dim=2)
                 counter_tracking_latents = torch.cat([counter_tracking_maps, counter_tracking_image_latents], dim=2)
-                counter_video_latents = torch.cat([counter_video_maps, counter_video_image_latents], dim=2)
+                counter_video_latents    = torch.cat([counter_video_maps   , counter_video_image_latents   ], dim=2)
 
                 if args.tracking_column is None:
                     assert False, args
@@ -1214,13 +1265,14 @@ def main(args):
         transformer = transformer.to(dtype)
 
         if args.tracking_column is None:
-            pipe = CogVideoXImageToVideoPipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
-                transformer=transformer,  # Use trained transformer
-                revision=args.revision,
-                variant=args.variant,
-                torch_dtype=dtype,
-            )
+            assert False, args
+            # pipe = CogVideoXImageToVideoPipeline.from_pretrained(
+            #     args.pretrained_model_name_or_path,
+            #     transformer=transformer,  # Use trained transformer
+            #     revision=args.revision,
+            #     variant=args.variant,
+            #     torch_dtype=dtype,
+            # )
         else:
             pipe = CogVideoXImageToVideoPipelineTracking.from_pretrained(
                 args.pretrained_model_name_or_path,
@@ -1298,7 +1350,11 @@ def main(args):
                 }
 
                 if args.tracking_column is not None:
-                    pipeline_args["tracking_map_path"] = args.tracking_map_path
+                    pipeline_args["tracking_map_path"        ] = args.tracking_map_path
+                    pipeline_args["counter_tracking_map_path"] = args.counter_tracking_map_path
+                    pipeline_args["counter_video_path"       ] = args.counter_video_path
+                else:
+                    assert False, args
 
                 video = log_validation(
                     accelerator=accelerator,
