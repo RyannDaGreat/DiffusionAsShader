@@ -70,8 +70,8 @@ for learning_rate in "${LEARNING_RATES[@]}"; do
           --counter_tracking_column $COUNTER_TRACKING_COLUMN \
           --counter_video_column $COUNTER_VIDEO_COLUMN \
           --tracking_map_path $TRACKING_MAP_PATH \
-          --tracking_map_path $COUNTER_TRACKING_MAP_PATH \
-          --tracking_map_path $COUNTER_VIDEO_MAP_PATH \
+          --counter_tracking_map_path $COUNTER_TRACKING_MAP_PATH \
+          --counter_video_map_path $COUNTER_VIDEO_MAP_PATH \
           --num_tracking_blocks 18 \
           --height_buckets 480 \
           --width_buckets 720 \
