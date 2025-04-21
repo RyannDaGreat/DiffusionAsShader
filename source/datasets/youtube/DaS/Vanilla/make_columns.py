@@ -1,4 +1,5 @@
-from rp import *
+import rp
+import sys
 
 sys.path += rp.get_absolute_paths(
     [
@@ -15,14 +16,14 @@ from source.datasets.youtube.youtube_dataset import ProcessedYoutubeDataset
 dataset = ProcessedYoutubeDataset()
 
 # Right now just using 1000 samples so I can test the code and make sure it runs
-samples = gather(dataset, range(1000))
+samples = rp.gather(dataset, range(1000))
 
 def prepare_sample(sample):
     if not rp.path_exists(sample.video_480p49_path):
         sample.video_480p49
         sample.upload()
 
-load_files(
+rp.load_files(
     prepare_sample,
     samples,
     show_progress=True,
@@ -30,14 +31,21 @@ load_files(
     num_threads=100,
 )
 
-prompt    = [x.prompt.replace('\n',' ') for x in samples]
-videos    = [x.video_480p49_path        for x in samples]
-trackings = [x.video_dasTrackvid_path   for x in samples]
+prompt            = [x.prompt.replace('\n',' ')     for x in samples]
+videos            = [x.video_480p49_path            for x in samples]
+trackings         = [x.video_dasTrackvid_path       for x in samples]
+counter_trackings = [x.cogxCounterVideo_dasTrackvid for x in samples]
+counter_videos    = [x.cogxCounterVideo             for x in samples]
 
-prompt_path    = save_file_lines(prompt   , "prompt.txt"   )
-videos_path    = save_file_lines(videos   , "videos.txt"   )
-trackings_path = save_file_lines(trackings, "trackings.txt")
+prompt_path            = rp.save_file_lines(prompt           , "prompt.txt"           )
+videos_path            = rp.save_file_lines(videos           , "videos.txt"           )
+trackings_path         = rp.save_file_lines(trackings        , "trackings.txt"        )
+counter_trackings_path = rp.save_file_lines(counter_trackings, "counter_trackings.txt")
+counter_videos_path    = rp.save_file_lines(counter_videos   , "counter_videos.txt"   )
 
-print(fansi_highlight_path(get_absolute_path(prompt_path   )))
-print(fansi_highlight_path(get_absolute_path(videos_path   )))
-print(fansi_highlight_path(get_absolute_path(trackings_path)))
+print(rp.fansi_highlight_path(rp.get_absolute_path(prompt_path           )))
+print(rp.fansi_highlight_path(rp.get_absolute_path(videos_path           )))
+print(rp.fansi_highlight_path(rp.get_absolute_path(trackings_path        )))
+print(rp.fansi_highlight_path(rp.get_absolute_path(counter_trackings_path)))
+print(rp.fansi_highlight_path(rp.get_absolute_path(counter_videos_path   )))
+
