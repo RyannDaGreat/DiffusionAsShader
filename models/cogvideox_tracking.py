@@ -766,7 +766,56 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
 
             model.second_patch_embed.proj.weight.data.zero_()
             model.second_patch_embed.proj.bias.data.zero_()
+            model.second_patch_embed.text_proj.load_state_dict(model.patch_embed.text_proj.state_dict())
             
+            #How I came up with the next lines of code:
+            #        >>> if not 'm' in vars():
+            #        ...     import models.cogvideox_tracking as t
+            #        ...     m=t.CogVideoXTransformer3DModelTracking.from_pretrained('/home/jupyter/CleanCode/Github/DiffusionAsShader/diffusion_shader_model/transformer')
+            #        ...     print(m.transformer_blocks_copy[5].attn1.to_v.weight.data[0])
+            #        ... 
+            #        ... from icecream import ic
+            #        ... ic(m.patch_embed.text_proj.weight.data)
+            #        ... ic(m.second_patch_embed.text_proj.weight.data)
+            #        ... # ┌                                                                                         ┐
+            #        ... # │┌                                                                                 ┐    ┌┐│
+            #        ... ic((m.second_patch_embed.text_proj.weight.data == m.patch_embed.text_proj.weight.data).all())
+            #        ... # │└                                                                                 ┘    └┘│
+            #        ... # └                                                                                         ┘
+            #        ... ic(m.second_patch_embed.proj.weight.data.any())
+            #        ... ic(
+            #        ...     m.patch_embed.proj.bias.shape,
+            #        ...     m.second_patch_embed.proj.bias.shape,
+            #        ...     m.patch_embed.proj.bias.shape == m.second_patch_embed.proj.bias.shape,
+            #        ... )
+            #        ... ic(
+            #        ...     m.patch_embed.proj.weight.data.shape,
+            #        ...     m.second_patch_embed.proj.weight.data.shape,
+            #        ... )
+            #        ic| m.patch_embed.text_proj.weight.data: tensor([[-0.0042,  0.0457,  0.0121,  ...,  0.0091,  0.0104, -0.0090],
+            #                                                         [-0.0096,  0.0042,  0.0270,  ..., -0.0388, -0.0500,  0.0229],
+            #                                                         [ 0.0058, -0.0046, -0.0598,  ..., -0.0225,  0.0164,  0.0093],
+            #                                                         ...,
+            #                                                         [ 0.0304,  0.0103,  0.0097,  ..., -0.0156, -0.0242,  0.0608],
+            #                                                         [ 0.0298, -0.0126,  0.0210,  ...,  0.0232,  0.0161, -0.0165],
+            #                                                         [-0.0001, -0.0119, -0.0025,  ...,  0.0113, -0.0549,  0.0198]])
+            #        ic| m.second_patch_embed.text_proj.weight.data: tensor([[-0.0042,  0.0457,  0.0121,  ...,  0.0091,  0.0104, -0.0090],
+            #                                                                [-0.0096,  0.0042,  0.0270,  ..., -0.0388, -0.0500,  0.0229],
+            #                                                                [ 0.0058, -0.0046, -0.0598,  ..., -0.0225,  0.0164,  0.0093],
+            #                                                                ...,
+            #                                                                [ 0.0304,  0.0103,  0.0097,  ..., -0.0156, -0.0242,  0.0608],
+            #                                                                [ 0.0298, -0.0126,  0.0210,  ...,  0.0232,  0.0161, -0.0165],
+            #                                                                [-0.0001, -0.0119, -0.0025,  ...,  0.0113, -0.0549,  0.0198]])
+            #        ic| (m.second_patch_embed.text_proj.weight.data == m.patch_embed.text_proj.weight.data).all(): tensor(True)
+            #        ic| m.second_patch_embed.proj.weight.data.any(): tensor(False)
+            #        ic| m.patch_embed.proj.bias.shape: torch.Size([3072])
+            #            m.second_patch_embed.proj.bias.shape: torch.Size([3072])
+            #            m.patch_embed.proj.bias.shape == m.second_patch_embed.proj.bias.shape: True
+            #        ic| m.patch_embed.proj.weight.data.shape: torch.Size([3072, 32, 2, 2])
+            #            m.second_patch_embed.proj.weight.data.shape: torch.Size([3072, 96, 2, 2])
+            model.second_patch_embed.proj.bias  .data[:]        =model.patch_embed.proj.bias  .data
+            model.second_patch_embed.proj.weight.data[:,:32,:,:]=model.patch_embed.proj.weight.data
+
             for param in model.parameters():
                 param.requires_grad = False
             
