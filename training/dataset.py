@@ -302,7 +302,14 @@ class VideoDatasetWithResizing(VideoDataset):
 
 class VideoDatasetWithResizingTracking(VideoDataset):
     def __init__(self, *args, **kwargs) -> None:
-        self.tracking_column = kwargs.pop("tracking_column", None)
+        self.tracking_column         = kwargs.pop("tracking_column"        , None)
+        self.counter_tracking_column = kwargs.pop("counter_tracking_column", None)
+        self.counter_video_column    = kwargs.pop("counter_video_column"   , None)
+
+        assert self.tracking_column         is not None
+        assert self.counter_tracking_column is not None
+        assert self.counter_video_column    is not None
+
         super().__init__(*args, **kwargs)
 
     def _preprocess_video(
@@ -382,23 +389,23 @@ class VideoDatasetWithResizingTracking(VideoDataset):
 
         if not prompt_path.exists() or not prompt_path.is_file():
             raise ValueError(
-                "Expected `--caption_column` to be path to a file in `--data_root` containing line-separated text prompts."
+                f"Expected `--caption_column` to be path to a file in `--data_root` containing line-separated text prompts. prompt_path={prompt_path}"
             )
         if not video_path.exists() or not video_path.is_file():
             raise ValueError(
-                "Expected `--video_column` to be path to a file in `--data_root` containing line-separated paths to video data in the same directory."
+                f"Expected `--video_column` to be path to a file in `--data_root` containing line-separated paths to video data in the same directory. video_path={video_path}"
             )
         if not tracking_path.exists() or not tracking_path.is_file():
             raise ValueError(
-                "Expected `--tracking_column` to be path to a file in `--data_root` containing line-separated tracking information."
+                f"Expected `--tracking_column` to be path to a file in `--data_root` containing line-separated tracking information. tracking_path={tracking_path}"
             )
         if not counter_tracking_path.exists() or not counter_tracking_path.is_file():
             raise ValueError(
-                "Expected `--counter_tracking_column` to be path to a file in `--data_root` containing line-separated counter_tracking information."
+                f"Expected `--counter_tracking_column` to be path to a file in `--data_root` containing line-separated counter_tracking information. counter_tracking_path={counter_tracking_path}"
             )
         if not counter_video_path.exists() or not counter_video_path.is_file():
             raise ValueError(
-                "Expected `--counter_video_column` to be path to a file in `--data_root` containing line-separated counter_video information."
+                f"Expected `--counter_video_column` to be path to a file in `--data_root` containing line-separated counter_video information. counter_video_path={counter_video_path}"
             )
 
         with open(prompt_path, "r", encoding="utf-8") as file:

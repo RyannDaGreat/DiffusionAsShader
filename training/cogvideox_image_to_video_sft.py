@@ -673,6 +673,8 @@ def main(args):
                 "dataset_file": args.dataset_file,
                 "caption_column": args.caption_column,
                 "tracking_column": args.tracking_column,
+                "counter_tracking_column": args.counter_tracking_column,
+                "counter_video_column": args.counter_video_column,
                 "video_column": args.video_column,
                 "max_num_frames": args.max_num_frames,
                 "id_token": args.id_token,
@@ -685,21 +687,22 @@ def main(args):
             }   
             train_dataset = VideoDatasetWithResizingTracking(**dataset_init_kwargs)
         else:
-            dataset_init_kwargs = {
-                "data_root": args.data_root,
-                "dataset_file": args.dataset_file,
-                "caption_column": args.caption_column,
-                "video_column": args.video_column,
-                "max_num_frames": args.max_num_frames,
-                "id_token": args.id_token,
-                "height_buckets": args.height_buckets,
-                "width_buckets": args.width_buckets,
-                "frame_buckets": args.frame_buckets,
-                "load_tensors": args.load_tensors,
-                "random_flip": args.random_flip,
-                "image_to_video": True,
-            } 
-            train_dataset = VideoDatasetWithResizing(**dataset_init_kwargs)
+            assert False, args
+            # dataset_init_kwargs = {
+            #     "data_root": args.data_root,
+            #     "dataset_file": args.dataset_file,
+            #     "caption_column": args.caption_column,
+            #     "video_column": args.video_column,
+            #     "max_num_frames": args.max_num_frames,
+            #     "id_token": args.id_token,
+            #     "height_buckets": args.height_buckets,
+            #     "width_buckets": args.width_buckets,
+            #     "frame_buckets": args.frame_buckets,
+            #     "load_tensors": args.load_tensors,
+            #     "random_flip": args.random_flip,
+            #     "image_to_video": True,
+            # } 
+            # train_dataset = VideoDatasetWithResizing(**dataset_init_kwargs)
     else:
         train_dataset = VideoDatasetWithResizeAndRectangleCrop(
             video_reshape_mode=args.video_reshape_mode, **dataset_init_kwargs
