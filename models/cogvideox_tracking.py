@@ -760,7 +760,6 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
             base_model = OriginalCogVideoXTransformer3DModelTracking.from_pretrained(pretrained_model_name_or_path, **kwargs)
             
             config = dict(base_model.config)
-            assert "num_tracking_blocks" in config
             
             model = cls(**config)
             model.load_state_dict(base_model.state_dict(), strict=False)
