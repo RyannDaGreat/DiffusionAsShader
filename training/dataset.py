@@ -512,6 +512,8 @@ class VideoDatasetWithResizingTracking(VideoDataset):
     
     def _load_preprocessed_latents_and_embeds(self, path: Path, tracking_path: Path) -> Tuple[torch.Tensor, torch.Tensor]:
         rp.fansi_print(f"WHY THE FUCK ARE WE HERE??? path={path} tracking_path={tracking_path}",'bold green green on red red')
+        assert False, "WHY TTGE FUCK"
+
         filename_without_ext = path.name.split(".")[0]
         pt_filename = f"{filename_without_ext}.pt"
         

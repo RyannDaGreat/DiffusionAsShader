@@ -163,6 +163,9 @@ def log_validation(
     is_final_validation: bool = False,
     random_flip: Optional[float] = None,
 ):
+    rp.fansi_print("SKIPPING VALIDATION FOR NOW - PLEASE REVISIT. CLAUDE WROTE PIPELINE CODE, NEEDS TO BE REDONE MANUALLY. ",'red yellow on green black bold undercurl')
+    return
+
     logger.info(
         f"Running validation... \n Generating {args.num_validation_videos} videos with prompt: {pipeline_args['prompt']}."
     )
@@ -263,6 +266,9 @@ def log_validation(
     pipeline_args["counter_tracking_maps"] = counter_tracking_maps
     pipeline_args["counter_video_maps"   ] = counter_video_maps
 
+    rp.fansi_print(f'tracking_maps.dtype = {tracking_maps.dtype} ; counter_tracking_maps.dtype={counter_tracking_maps.dtype} ; counter_video_maps.dtype={counter_video_maps.dtype}', 'yellow on blue italic')
+
+
     # run inference
     generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
 
@@ -340,10 +346,18 @@ class CollateFunctionTracking:
         tracking_maps = [x["tracking_map"] for x in data[0]]
         tracking_maps = torch.stack(tracking_maps).to(dtype=self.weight_dtype, non_blocking=True)
 
+        counter_tracking_maps = [x["counter_tracking_map"] for x in data[0]]
+        counter_tracking_maps = torch.stack(counter_tracking_maps).to(dtype=self.weight_dtype, non_blocking=True)
+
+        counter_video_maps = [x["counter_video_map"] for x in data[0]]
+        counter_video_maps = torch.stack(counter_video_maps).to(dtype=self.weight_dtype, non_blocking=True)
+
         return {
             "videos": videos,
             "prompts": prompts,
             "tracking_maps": tracking_maps,
+            "counter_tracking_maps" : counter_tracking_maps,
+            "counter_video_maps" : counter_video_maps,
         }
 
 class CollateFunctionImageTracking:
@@ -366,11 +380,19 @@ class CollateFunctionImageTracking:
         tracking_maps = [x["tracking_map"] for x in data[0]]
         tracking_maps = torch.stack(tracking_maps).to(dtype=self.weight_dtype, non_blocking=True)
 
+        counter_tracking_maps = [x["counter_tracking_map"] for x in data[0]]
+        counter_tracking_maps = torch.stack(counter_tracking_maps).to(dtype=self.weight_dtype, non_blocking=True)
+
+        counter_video_maps = [x["counter_video_map"] for x in data[0]]
+        counter_video_maps = torch.stack(counter_video_maps).to(dtype=self.weight_dtype, non_blocking=True)
+
         return {
             "images": images,
             "videos": videos,
             "prompts": prompts,
             "tracking_maps": tracking_maps,
+            "counter_tracking_maps" : counter_tracking_maps,
+            "counter_video_maps" : counter_video_maps,
         }
 
 def main(args):
@@ -763,6 +785,10 @@ def main(args):
         transformer, optimizer, train_dataloader, lr_scheduler
     )
 
+    for step, batch in enumerate(train_dataloader):
+        rp.fansi_print('BATCHY BATCHERINO: str(batch): '+str(batch), 'italic bold light blue on black')
+        break
+
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if overrode_max_train_steps:
@@ -884,6 +910,8 @@ def main(args):
 
             if args.tracking_column is not None:
                 pipeline_args["tracking_map_path"] = args.tracking_map_path
+                pipeline_args["counter_tracking_map_path"] = args.counter_tracking_map_path
+                pipeline_args["counter_video_map_path"] = args.counter_video_map_path
 
             log_validation(
                 accelerator=accelerator,
@@ -929,6 +957,8 @@ def main(args):
                 videos = batch["videos"].to(accelerator.device, non_blocking=True)
                 images = batch["images"].to(accelerator.device, non_blocking=True)
                 prompts = batch["prompts"]
+
+                rp.fansi_print(f'BATCH BATCH BATCH! list(batch)={list(batch)}','bright yellow on blue blue bold italic')
 
                 if args.tracking_column is not None:
                     tracking_maps = batch["tracking_maps"].to(accelerator.device, non_blocking=True)

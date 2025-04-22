@@ -30,7 +30,7 @@ def to_cpu(x):
     try:
         return x.to('cpu')
     except NotImplementedError:
-        return x.to_empty(device='cpu')
+        return x.to_empty(device='cpu').to(torch.bfloat16)
 class OriginalCogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixin):
     """
     ORIGINAL CODE BASE - DO NOT MODIFY THIS CLASS! This exists to load the original checkpoint.
