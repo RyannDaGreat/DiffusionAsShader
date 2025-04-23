@@ -580,7 +580,8 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
             C=32,
             CCC=32*3,
             #
-            verbose='bold altbw white random blue',
+            verbose=False,
+            # verbose='bold altbw white random blue',
         )
 
         if attention_kwargs is not None:

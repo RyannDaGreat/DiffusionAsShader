@@ -785,9 +785,9 @@ def main(args):
         transformer, optimizer, train_dataloader, lr_scheduler
     )
 
-    for step, batch in enumerate(train_dataloader):
-        rp.fansi_print('BATCHY BATCHERINO: str(batch): '+str(batch), 'italic bold light blue on black')
-        break
+    # for step, batch in enumerate(train_dataloader):
+    #     rp.fansi_print('BATCHY BATCHERINO: str(batch): '+str(batch), 'italic bold light blue on black')
+    #     break
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -952,7 +952,7 @@ def main(args):
             gradient_norm_after_clip = None
 
             with accelerator.accumulate(models_to_accumulate):
-                rp.fansi_print('str(batch): '+str(batch), 'italic bold light blue on black')
+                # rp.fansi_print('str(batch): '+str(batch), 'italic bold light blue on black')
 
                 videos = batch["videos"].to(accelerator.device, non_blocking=True)
                 images = batch["images"].to(accelerator.device, non_blocking=True)
