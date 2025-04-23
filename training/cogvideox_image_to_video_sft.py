@@ -1221,24 +1221,14 @@ def main(args):
                 torch.cuda.synchronize(accelerator.device)
                 transformer.eval()
 
-                if args.tracking_column is None:
-                    pipe = CogVideoXImageToVideoPipeline.from_pretrained(
-                        args.pretrained_model_name_or_path,
-                        transformer=unwrap_model(transformer),
-                        scheduler=scheduler,
-                        revision=args.revision,
-                        variant=args.variant,
-                        torch_dtype=weight_dtype,
-                    )
-                else:
-                    pipe = CogVideoXImageToVideoPipelineTracking.from_pretrained(
-                        args.pretrained_model_name_or_path,
-                        transformer=unwrap_model(transformer),
-                        scheduler=scheduler,
-                        revision=args.revision,
-                        variant=args.variant,
-                        torch_dtype=weight_dtype,
-                    )
+                pipe = CogVideoXImageToVideoPipelineTracking.from_pretrained(
+                    args.pretrained_model_name_or_path,
+                    transformer=unwrap_model(transformer),
+                    scheduler=scheduler,
+                    revision=args.revision,
+                    variant=args.variant,
+                    torch_dtype=weight_dtype,
+                )
 
                 if args.enable_slicing:
                     pipe.vae.enable_slicing()
@@ -1338,26 +1328,16 @@ def main(args):
         print_memory(accelerator.device)
         reset_memory(accelerator.device)
 
-        # Final test inference
-        if args.tracking_column is None:
-            assert False
-            # pipe = CogVideoXImageToVideoPipeline.from_pretrained(
-            #     args.pretrained_model_name_or_path,
-            #     transformer=unwrap_model(transformer),
-            #     scheduler=scheduler,
-            #     revision=args.revision,
-            #     variant=args.variant,
-            #     torch_dtype=weight_dtype,
-            # )
-        else:
-            pipe = CogVideoXImageToVideoPipelineTracking.from_pretrained(
-                args.pretrained_model_name_or_path,
-                transformer=unwrap_model(transformer),
-                scheduler=scheduler,
-                revision=args.revision,
-                variant=args.variant,
-                torch_dtype=weight_dtype,
-            )
+
+        pipe = CogVideoXImageToVideoPipelineTracking.from_pretrained(
+            args.pretrained_model_name_or_path,
+            transformer=unwrap_model(transformer),
+            scheduler=scheduler,
+            revision=args.revision,
+            variant=args.variant,
+            torch_dtype=weight_dtype,
+        )
+        
         pipe.scheduler = CogVideoXDPMScheduler.from_config(pipe.scheduler.config)
 
         if args.enable_slicing:
@@ -1408,22 +1388,6 @@ def main(args):
         print_memory(accelerator.device)
         reset_memory(accelerator.device)
         torch.cuda.synchronize(accelerator.device)
-
-        if args.push_to_hub:
-            save_model_card(
-                repo_id,
-                videos=validation_outputs,
-                base_model=args.pretrained_model_name_or_path,
-                validation_prompt=args.validation_prompt,
-                repo_folder=args.output_dir,
-                fps=args.fps,
-            )
-            upload_folder(
-                repo_id=repo_id,
-                folder_path=args.output_dir,
-                commit_message="End of training",
-                ignore_patterns=["step_*", "epoch_*"],
-            )
 
     accelerator.end_training()
 

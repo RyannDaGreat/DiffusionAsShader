@@ -1174,6 +1174,12 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
         tracking_image = self.video_processor.preprocess(tracking_image, height=height, width=width).to(
             device, dtype=prompt_embeds.dtype
         )
+        counter_tracking_image = self.video_processor.preprocess(counter_tracking_image, height=height, width=width).to(
+            device, dtype=prompt_embeds.dtype
+        )
+        counter_video_image = self.video_processor.preprocess(counter_video_image, height=height, width=width).to(
+            device, dtype=prompt_embeds.dtype
+        )
         if self.transformer.config.in_channels != 16:
             latent_channels = self.transformer.config.in_channels // 2
         else:
@@ -1190,7 +1196,6 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
             generator,
             latents,
         )
-        del image
         
         _, tracking_image_latents = self.prepare_latents(
             tracking_image,
@@ -1204,7 +1209,36 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
             generator,
             latents=None,
         )
-        del tracking_image
+
+        # 2. Process counter tracking maps
+        # Get latents for counter tracking first frame
+        _, counter_tracking_image_latents = self.prepare_latents(
+            counter_tracking_image,
+            batch_size * num_videos_per_prompt,
+            latent_channels,
+            num_frames,
+            height,
+            width,
+            prompt_embeds.dtype,
+            device,
+            generator,
+            latents=None,
+        )
+                        
+        # 3. Process counter video maps
+        # Get latents for counter video first frame
+        _, counter_video_image_latents = self.prepare_latents(
+            counter_video_image,
+            batch_size * num_videos_per_prompt,
+            latent_channels,
+            num_frames,
+            height,
+            width,
+            prompt_embeds.dtype,
+            device,
+            generator,
+            latents=None,
+        )
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -1216,7 +1250,7 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
             else None
         )
 
-        # 8. Denoising loop
+        # 8. Denoising loopx
         num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
 
         with self.progress_bar(total=num_inference_steps) as progress_bar:
@@ -1236,7 +1270,6 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
                 # Concatenate along channel dimension (dim=2)
                 # Result: [B, T, 2*C, H, W] where the channels contain both content and conditioning
                 latent_model_input = torch.cat([latent_model_input, latent_image_input], dim=2)
-                del latent_image_input
 
                 # Handle all three tracking map streams (all required inputs)
                 
@@ -1244,47 +1277,15 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
                 latents_tracking_image = torch.cat([tracking_image_latents] * 2) if do_classifier_free_guidance else tracking_image_latents
                 tracking_maps_input = torch.cat([tracking_maps] * 2) if do_classifier_free_guidance else tracking_maps
                 tracking_maps_input = torch.cat([tracking_maps_input, latents_tracking_image], dim=2)
-                del latents_tracking_image
-                
-                # 2. Process counter tracking maps
-                # Get latents for counter tracking first frame
-                _, counter_tracking_image_latents = self.prepare_latents(
-                    counter_tracking_image,
-                    batch_size * num_videos_per_prompt,
-                    latent_channels,
-                    num_frames,
-                    height,
-                    width,
-                    prompt_embeds.dtype,
-                    device,
-                    generator,
-                    latents=None,
-                )
                 
                 latents_counter_tracking_image = torch.cat([counter_tracking_image_latents] * 2) if do_classifier_free_guidance else counter_tracking_image_latents
                 counter_tracking_maps_input = torch.cat([counter_tracking_maps] * 2) if do_classifier_free_guidance else counter_tracking_maps
                 counter_tracking_maps_input = torch.cat([counter_tracking_maps_input, latents_counter_tracking_image], dim=2)
-                del latents_counter_tracking_image, counter_tracking_image_latents
-                
-                # 3. Process counter video maps
-                # Get latents for counter video first frame
-                _, counter_video_image_latents = self.prepare_latents(
-                    counter_video_image,
-                    batch_size * num_videos_per_prompt,
-                    latent_channels,
-                    num_frames,
-                    height,
-                    width,
-                    prompt_embeds.dtype,
-                    device,
-                    generator,
-                    latents=None,
-                )
+
                 
                 latents_counter_video_image = torch.cat([counter_video_image_latents] * 2) if do_classifier_free_guidance else counter_video_image_latents
                 counter_video_maps_input = torch.cat([counter_video_maps] * 2) if do_classifier_free_guidance else counter_video_maps
                 counter_video_maps_input = torch.cat([counter_video_maps_input, latents_counter_video_image], dim=2)
-                del latents_counter_video_image, counter_video_image_latents
 
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
@@ -1304,10 +1305,10 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
                 )[0]
                 
                 # Clean up tensors to free memory
-                del latent_model_input
-                del tracking_maps_input
-                del counter_tracking_maps_input
-                del counter_video_maps_input
+                # del latent_model_input
+                # del tracking_maps_input
+                # del counter_tracking_maps_input
+                # del counter_video_maps_input
                 noise_pred = noise_pred.float()
 
                 # perform guidance

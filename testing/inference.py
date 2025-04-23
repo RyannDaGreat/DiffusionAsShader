@@ -115,13 +115,25 @@ def generate_video(
     pipe.transformer.gradient_checkpointing = False
     
     if tracking_maps is not None and generate_type == "i2v":
-        print("Encoding tracking maps")
-        tracking_maps = tracking_maps.unsqueeze(0) # [B, T, C, H, W]
-        tracking_maps = tracking_maps.permute(0, 2, 1, 3, 4)  # [B, C, T, H, W]
-        with torch.no_grad():
-            tracking_latent_dist = pipe.vae.encode(tracking_maps).latent_dist
-            tracking_maps = tracking_latent_dist.sample() * pipe.vae.config.scaling_factor
-            tracking_maps = tracking_maps.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
+
+        def get_maps(video_path):
+            maps = load_video(video_path)
+            # Convert list of PIL Images to tensor [T, C, H, W]
+            maps = torch.stack([
+                torch.from_numpy(np.array(frame)).permute(2, 0, 1).float() / 255.0 
+                for frame in maps
+            ])
+            maps = maps.to(device=device, dtype=dtype)
+            first_frame = maps[0:1]  # Get first frame as [1, C, H, W]
+            height, width = first_frame.shape[2], first_frame.shape[3]
+
+            print("Encoding tracking maps")
+            maps = maps.unsqueeze(0) # [B, T, C, H, W]
+            maps = maps.permute(0, 2, 1, 3, 4)  # [B, C, T, H, W]
+            with torch.no_grad():
+                latent_dist = pipe.vae.encode(maps).latent_dist
+                maps = latent_dist.sample() * pipe.vae.config.scaling_factor
+                maps = maps.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
     else:
         tracking_maps = None
         tracking_first_frame = None
