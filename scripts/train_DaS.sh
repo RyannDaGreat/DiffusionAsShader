@@ -29,8 +29,8 @@ OPTIMIZERS=("adamw")
 MAX_TRAIN_STEPS=("2000")
 WARMUP_STEPS=100
 CHECKPOINT_STEPS=500
-CHECKPOINT_STEPS=5 #TINY MODE FOR TESTING
-TRAIN_BATCH_SIZE=2
+CHECKPOINT_STEPS=5 #TINY MODE FOR TESTING: Use with source/checkpoint_pruner.py so you don't run out of harddrive space.
+TRAIN_BATCH_SIZE=2 
 
 # Single GPU uncompiled training
 ACCELERATE_CONFIG_FILE="accelerate_configs/uncompiled_2.yaml"
