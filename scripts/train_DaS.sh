@@ -26,11 +26,13 @@ PORT=29500
 LEARNING_RATES=("1e-4")
 LR_SCHEDULES=("cosine_with_restarts")
 OPTIMIZERS=("adamw")
-MAX_TRAIN_STEPS=("2000")
+MAX_TRAIN_STEPS=("100000")
 WARMUP_STEPS=100
 CHECKPOINT_STEPS=500
 CHECKPOINT_STEPS=5 #TINY MODE FOR TESTING: Use with source/checkpoint_pruner.py so you don't run out of harddrive space.
 TRAIN_BATCH_SIZE=2 
+
+RUN_NAME="CounterChans2500"
 
 # Single GPU uncompiled training
 ACCELERATE_CONFIG_FILE="accelerate_configs/uncompiled_2.yaml"
@@ -60,7 +62,7 @@ for learning_rate in "${LEARNING_RATES[@]}"; do
   for lr_schedule in "${LR_SCHEDULES[@]}"; do
     for optimizer in "${OPTIMIZERS[@]}"; do
       for steps in "${MAX_TRAIN_STEPS[@]}"; do
-        output_dir="${OUTPUT_PATH}/cogshader_inv-avatar-physics_steps_${steps}__optimizer_${optimizer}__lr-schedule_${lr_schedule}__learning-rate_${learning_rate}/"
+        output_dir="${OUTPUT_PATH}/${RUN_NAME}${steps}__optimizer_${optimizer}__lr-schedule_${lr_schedule}__learning-rate_${learning_rate}/"
 
         cmd="accelerate launch --config_file $ACCELERATE_CONFIG_FILE --gpu_ids $GPU_IDS --num_processes $NUM_PROCESSES --main_process_port $PORT training/cogvideox_image_to_video_sft.py \
           --pretrained_model_name_or_path $MODEL_PATH \
