@@ -310,80 +310,35 @@ def log_validation(
     return videos
 
 
-class CollateFunction:
-    def __init__(self, weight_dtype: torch.dtype, load_tensors: bool) -> None:
-        self.weight_dtype = weight_dtype
-        self.load_tensors = load_tensors
-
-    def __call__(self, data: Dict[str, Any]) -> Dict[str, torch.Tensor]:
-        prompts = [x["prompt"] for x in data[0]]
-
-        if self.load_tensors:
-            prompts = torch.stack(prompts).to(dtype=self.weight_dtype, non_blocking=True)
-
-        videos = [x["video"] for x in data[0]]
-        videos = torch.stack(videos).to(dtype=self.weight_dtype, non_blocking=True)
-
-        return {
-            "videos": videos,
-            "prompts": prompts,
-        }
-
-class CollateFunctionTracking:
-    def __init__(self, weight_dtype: torch.dtype, load_tensors: bool) -> None:
-        self.weight_dtype = weight_dtype
-        self.load_tensors = load_tensors
-
-    def __call__(self, data: Dict[str, Any]) -> Dict[str, torch.Tensor]:
-        prompts = [x["prompt"] for x in data[0]]
-
-        if self.load_tensors:
-            prompts = torch.stack(prompts).to(dtype=self.weight_dtype, non_blocking=True)
-
-        videos = [x["video"] for x in data[0]]
-        videos = torch.stack(videos).to(dtype=self.weight_dtype, non_blocking=True)
-
-        tracking_maps = [x["tracking_map"] for x in data[0]]
-        tracking_maps = torch.stack(tracking_maps).to(dtype=self.weight_dtype, non_blocking=True)
-
-        counter_tracking_maps = [x["counter_tracking_map"] for x in data[0]]
-        counter_tracking_maps = torch.stack(counter_tracking_maps).to(dtype=self.weight_dtype, non_blocking=True)
-
-        counter_video_maps = [x["counter_video_map"] for x in data[0]]
-        counter_video_maps = torch.stack(counter_video_maps).to(dtype=self.weight_dtype, non_blocking=True)
-
-        return {
-            "videos": videos,
-            "prompts": prompts,
-            "tracking_maps": tracking_maps,
-            "counter_tracking_maps" : counter_tracking_maps,
-            "counter_video_maps" : counter_video_maps,
-        }
-
 class CollateFunctionImageTracking:
     def __init__(self, weight_dtype: torch.dtype, load_tensors: bool) -> None:
         self.weight_dtype = weight_dtype
         self.load_tensors = load_tensors
 
     def __call__(self, data: Dict[str, Any]) -> Dict[str, torch.Tensor]:
-        prompts = [x["prompt"] for x in data[0]]
+
+        USING_BUCKET_SAMPLER=False
+        if USING_BUCKET_SAMPLER:
+            data=data[0]
+
+        prompts = [x["prompt"] for x in data]
 
         if self.load_tensors:
             prompts = torch.stack(prompts).to(dtype=self.weight_dtype, non_blocking=True)
 
-        images = [x["image"] for x in data[0]]
+        images = [x["image"] for x in data]
         images = torch.stack(images).to(dtype=self.weight_dtype, non_blocking=True)
 
-        videos = [x["video"] for x in data[0]]
+        videos = [x["video"] for x in data]
         videos = torch.stack(videos).to(dtype=self.weight_dtype, non_blocking=True)
 
-        tracking_maps = [x["tracking_map"] for x in data[0]]
+        tracking_maps = [x["tracking_map"] for x in data]
         tracking_maps = torch.stack(tracking_maps).to(dtype=self.weight_dtype, non_blocking=True)
 
-        counter_tracking_maps = [x["counter_tracking_map"] for x in data[0]]
+        counter_tracking_maps = [x["counter_tracking_map"] for x in data]
         counter_tracking_maps = torch.stack(counter_tracking_maps).to(dtype=self.weight_dtype, non_blocking=True)
 
-        counter_video_maps = [x["counter_video_map"] for x in data[0]]
+        counter_video_maps = [x["counter_video_map"] for x in data]
         counter_video_maps = torch.stack(counter_video_maps).to(dtype=self.weight_dtype, non_blocking=True)
 
         return {
@@ -730,19 +685,16 @@ def main(args):
             video_reshape_mode=args.video_reshape_mode, **dataset_init_kwargs
         )
 
-    collate_fn = CollateFunction(weight_dtype, args.load_tensors)
-    collate_fn_tracking = CollateFunctionTracking(weight_dtype, args.load_tensors)
     collate_fn_image_tracking = CollateFunctionImageTracking(weight_dtype, args.load_tensors)
-
-    # rp.fansi_print(f'train_dataset[0]: {train_dataset[0]}','white italic bold blue')
 
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=1,
-        sampler=BucketSampler(train_dataset, batch_size=args.train_batch_size, shuffle=True),
-        collate_fn=collate_fn if args.tracking_column is None else collate_fn_image_tracking,
+        collate_fn=collate_fn_image_tracking,
         num_workers=args.dataloader_num_workers,
         pin_memory=args.pin_memory,
+        # sampler=BucketSampler(train_dataset, batch_size=args.train_batch_size, shuffle=True),
+        shuffle=True,
     )
 
     # Scheduler and math around the number of training steps.
@@ -972,10 +924,46 @@ def main(args):
                     counter_video_maps = batch["counter_video_maps"].to(accelerator.device, non_blocking=True)
                     counter_video_image = counter_video_maps[:,:1].clone()
 
+                def better_gpu_tensor_hash(tensor):
+                    # Get sum and mean values
+                    sum_val = tensor.sum().item()
+                    mean_val = tensor.mean().item()
+                    
+                    # Convert floats to their binary representation as integers
+                    import struct
+                    sum_int = struct.unpack('Q', struct.pack('d', float(sum_val)))[0]
+                    mean_int = struct.unpack('Q', struct.pack('d', float(mean_val)))[0]
+                    
+                    # Get shape hash
+                    shape_hash = hash(tensor.shape)
+                    
+                    # Combine using prime multipliers
+                    result = ((sum_int * 0x1fffffff) ^ 
+                            (mean_int * 0x01000193) ^ 
+                            (shape_hash * 0x0123456789ABCDEF)) & 0xFFFFFFFFFFFFFFFF
+                    
+                    return result
+                                
+                def cached_vae_encode(tensor):
+                    hash_code = better_gpu_tensor_hash(tensor)
+                    cache_folder='.vae_cache'
+                    rp.make_folder(cache_folder)
+                    file_path = f'{cache_folder}/{hash_code}.pth'
+                    if rp.file_exists(file_path):
+                        rp.tic()
+                        output = torch.load(file_path)
+                        rp.fansi_print(f"Loaded VAE output from {file_path} in {rp.toc():.3} seconds",'white green bold italic on dark gray')
+                    else:
+                        output = vae.encode(tensor).latent_dist.sample()
+                        torch.save(output, file_path)
+                        rp.fansi_print(f"Saved VAE output to {file_path} in {rp.toc():.3} seconds",'white green cyan bold italic on dark gray')
+                    output = output.to(dtype=tensor.dtype, device=tensor.device)
+                    return output
+
                 # Encode videos
                 if not args.load_tensors:
                     videos = videos.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
-                    latent_dist = vae.encode(videos).latent_dist
+                    latent_dist = cached_vae_encode(videos)
 
                     images = images.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
                     image_noise_sigma = torch.normal(
@@ -983,38 +971,38 @@ def main(args):
                     )
                     image_noise_sigma = torch.exp(image_noise_sigma)
                     noisy_images = images + torch.randn_like(images) * image_noise_sigma[:, None, None, None, None]
-                    image_latent_dist = vae.encode(noisy_images).latent_dist
+                    image_latent_dist = cached_vae_encode(noisy_images)
 
                     if args.tracking_column is not None:
                         tracking_maps = tracking_maps.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
-                        tracking_latent_dist = vae.encode(tracking_maps).latent_dist
+                        tracking_latent_dist = cached_vae_encode(tracking_maps)
 
                         tracking_image = tracking_image.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
-                        tracking_image_latent_dist = vae.encode(tracking_image).latent_dist
+                        tracking_image_latent_dist = cached_vae_encode(tracking_image)
 
                     if args.counter_tracking_column is not None:
                         counter_tracking_maps = counter_tracking_maps.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
-                        counter_tracking_latent_dist = vae.encode(counter_tracking_maps).latent_dist
+                        counter_tracking_latent_dist = cached_vae_encode(counter_tracking_maps)
 
                         counter_tracking_image = counter_tracking_image.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
-                        counter_tracking_image_latent_dist = vae.encode(counter_tracking_image).latent_dist
+                        counter_tracking_image_latent_dist = cached_vae_encode(counter_tracking_image)
 
                     if args.counter_video_column is not None:
                         counter_video_maps = counter_video_maps.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
-                        counter_video_latent_dist = vae.encode(counter_video_maps).latent_dist
+                        counter_video_latent_dist = cached_vae_encode(counter_video_maps)
 
                         counter_video_image = counter_video_image.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
-                        counter_video_image_latent_dist = vae.encode(counter_video_image).latent_dist
+                        counter_video_image_latent_dist = cached_vae_encode(counter_video_image)
 
                 else:
                     latent_dist = DiagonalGaussianDistribution(videos)
                     image_latent_dist = DiagonalGaussianDistribution(images)
 
-                image_latents = image_latent_dist.sample() * VAE_SCALING_FACTOR
+                image_latents = image_latent_dist * VAE_SCALING_FACTOR
                 image_latents = image_latents.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
                 image_latents = image_latents.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
 
-                video_latents = latent_dist.sample() * VAE_SCALING_FACTOR
+                video_latents = latent_dist * VAE_SCALING_FACTOR
                 video_latents = video_latents.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
                 video_latents = video_latents.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
 
@@ -1022,7 +1010,7 @@ def main(args):
                 latent_padding = image_latents.new_zeros(padding_shape)
                 image_latents = torch.cat([image_latents, latent_padding], dim=1)
 
-                tracking_image_latent_dist = tracking_image_latent_dist.sample() * VAE_SCALING_FACTOR
+                tracking_image_latent_dist = tracking_image_latent_dist * VAE_SCALING_FACTOR
                 tracking_image_latent_dist = tracking_image_latent_dist.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
                 tracking_image_latent_dist = tracking_image_latent_dist.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
 
@@ -1030,7 +1018,7 @@ def main(args):
                 tracking_image_latents = torch.cat([tracking_image_latent_dist, tracking_latent_padding], dim=1)
 
 
-                counter_tracking_image_latent_dist = counter_tracking_image_latent_dist.sample() * VAE_SCALING_FACTOR
+                counter_tracking_image_latent_dist = counter_tracking_image_latent_dist * VAE_SCALING_FACTOR
                 counter_tracking_image_latent_dist = counter_tracking_image_latent_dist.permute(0, 2, 1, 3, 4)  # [b, f, c, h, w]
                 counter_tracking_image_latent_dist = counter_tracking_image_latent_dist.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
 
@@ -1038,7 +1026,7 @@ def main(args):
                 counter_tracking_image_latents = torch.cat([counter_tracking_image_latent_dist, counter_tracking_latent_padding], dim=1)
 
 
-                counter_video_image_latent_dist = counter_video_image_latent_dist.sample() * VAE_SCALING_FACTOR
+                counter_video_image_latent_dist = counter_video_image_latent_dist * VAE_SCALING_FACTOR
                 counter_video_image_latent_dist = counter_video_image_latent_dist.permute(0, 2, 1, 3, 4)  # [b, f, c, h, w]
                 counter_video_image_latent_dist = counter_video_image_latent_dist.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
 
@@ -1053,17 +1041,17 @@ def main(args):
                     counter_video_image_latents = torch.zeros_like(counter_video_image_latents)
 
                 if args.tracking_column is not None:
-                    tracking_maps = tracking_latent_dist.sample() * VAE_SCALING_FACTOR
+                    tracking_maps = tracking_latent_dist * VAE_SCALING_FACTOR
                     tracking_maps = tracking_maps.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
                     tracking_maps = tracking_maps.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
 
                 if args.counter_tracking_column is not None:
-                    counter_tracking_maps = counter_tracking_latent_dist.sample() * VAE_SCALING_FACTOR
+                    counter_tracking_maps = counter_tracking_latent_dist * VAE_SCALING_FACTOR
                     counter_tracking_maps = counter_tracking_maps.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
                     counter_tracking_maps = counter_tracking_maps.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
 
                 if args.counter_video_column is not None:
-                    counter_video_maps = counter_video_latent_dist.sample() * VAE_SCALING_FACTOR
+                    counter_video_maps = counter_video_latent_dist * VAE_SCALING_FACTOR
                     counter_video_maps = counter_video_maps.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
                     counter_video_maps = counter_video_maps.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
 
@@ -1328,7 +1316,6 @@ def main(args):
         print_memory(accelerator.device)
         reset_memory(accelerator.device)
 
-
         pipe = CogVideoXImageToVideoPipelineTracking.from_pretrained(
             args.pretrained_model_name_or_path,
             transformer=unwrap_model(transformer),
@@ -1337,7 +1324,7 @@ def main(args):
             variant=args.variant,
             torch_dtype=weight_dtype,
         )
-        
+
         pipe.scheduler = CogVideoXDPMScheduler.from_config(pipe.scheduler.config)
 
         if args.enable_slicing:
