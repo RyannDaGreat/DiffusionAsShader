@@ -29,7 +29,7 @@ OPTIMIZERS=("adamw")
 MAX_TRAIN_STEPS=("100000")
 WARMUP_STEPS=100
 CHECKPOINT_STEPS=500
-CHECKPOINT_STEPS=5 #TINY MODE FOR TESTING: Use with source/checkpoint_pruner.py so you don't run out of harddrive space.
+CHECKPOINT_STEPS=50 #TINY MODE FOR TESTING: Use with source/checkpoint_pruner.py so you don't run out of harddrive space.
 TRAIN_BATCH_SIZE=2 
 
 RUN_NAME="CounterChans2500"
