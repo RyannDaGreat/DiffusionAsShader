@@ -47,21 +47,6 @@ def update_to_latest_checkpoint():
     )
     
 
-if "pipe" not in vars():
-    update_to_latest_checkpoint()
-    pipe = cogtrack.CogVideoXImageToVideoPipelineTracking.from_pretrained(
-        "/home/jupyter/CleanCode/Github/DiffusionAsShader/diffusion_shader_model_CKPT"
-    )
-
-    pipe.to(dtype=torch.bfloat16)
-    pipe.to(device)
-    #pipe.enable_sequential_cpu_offload(device=device)
-    pipe.vae.enable_slicing()
-    pipe.vae.enable_tiling()
-    pipe.transformer.eval()
-    pipe.text_encoder.eval()
-    pipe.vae.eval()
-
 def get_maps(video_path):
     from diffusers.utils import export_to_video, load_image, load_video
 
@@ -138,10 +123,10 @@ def run_pipe(
 @globalize_locals
 def run_test(index):
     
-    prompts = "/home/jupyter/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/prompt.txt"
+    prompts     = "/home/jupyter/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/prompt.txt"
     video_paths = "/home/jupyter/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/videos.txt"
     
-    prompts = load_file_lines(prompts,use_cache=True)
+    prompts     = load_file_lines(prompts,use_cache=True)
     video_paths = load_file_lines(video_paths,use_cache=True)
 
     video_names = get_folder_names(get_paths_parents(video_paths))
@@ -212,7 +197,7 @@ checkpoint_title = get_folder_name(checkpoint_root)
 ##########################
 # SETUP
 ##########################
-
+    
 latest_transformer_checkpoint = syncutil.sync_checkpoint_folder(checkpoint_root)
 
 set_current_directory('/home/jupyter/CleanCode/Github/DiffusionAsShader')
@@ -223,6 +208,20 @@ if not folder_exists('diffusion_shader_model_CKPT'):
 
 device = rp.select_torch_device(prefer_used=True)
 
+if "pipe" not in vars():
+    update_to_latest_checkpoint()
+    pipe = cogtrack.CogVideoXImageToVideoPipelineTracking.from_pretrained(
+        "/home/jupyter/CleanCode/Github/DiffusionAsShader/diffusion_shader_model_CKPT"
+    )
+
+    pipe.to(dtype=torch.bfloat16)
+    pipe.to(device)
+    #pipe.enable_sequential_cpu_offload(device=device)
+    pipe.vae.enable_slicing()
+    pipe.vae.enable_tiling()
+    pipe.transformer.eval()
+    pipe.text_encoder.eval()
+    pipe.vae.eval()
 
 ##########################
 # MAIN
