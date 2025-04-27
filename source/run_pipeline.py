@@ -1,15 +1,37 @@
+##########################
+# IMPORTS
+##########################
+
+import sys
+import os
+import shlex
+
+from functools import cached_property
+
 import models.cogvideox_tracking as cogtrack
 from rp import *
 import torch
 from icecream import ic
 
-device = rp.select_torch_device(prefer_used=True)
+sys.path += rp.get_absolute_paths(
+    [
+        "~/CleanCode/Management",
+        # "~/CleanCode/Github/DiffusionAsShader",
+        # "~/CleanCode/Datasets/Vids/Raw_Feb28",
+        # "~/CleanCode/Github/CogvideX-Interpolation-Mar23:MotionPrompting",
+        # "~/CleanCode/Github/CogvideX-Interpolation-Feb13:Inpainting",
+    ]
+)
+
+import syncutil
+
+
+##########################
+# FUNCTIONS
+##########################
 
 def update_to_latest_checkpoint():
-    latest_transformer_checkpoint = get_subfolders(
-        "/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/cogshader_inv-avatar-physics_steps_2000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4",
-        sort_by="number",
-    )[-1]
+    latest_transformer_checkpoint = checkpoint_root
     
     fansi_print(f'Using checkpoint: {latest_transformer_checkpoint}','bold green undercurl')
 
@@ -177,6 +199,34 @@ def run_test(index):
 
     save_video_mp4(preview_video, output_preview_path, video_bitrate="max", framerate=15)
     fansi_print(f"Saved Video: {output_preview_path}", "bold green italic")
+
+
+##########################
+# SETTINGS
+##########################
+
+checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans2500100000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-4500'
+checkpoint_title = get_folder_name(checkpoint_root)
+
+
+##########################
+# SETUP
+##########################
+
+latest_transformer_checkpoint = syncutil.sync_checkpoint_folder(checkpoint_root)
+
+set_current_directory('/home/jupyter/CleanCode/Github/DiffusionAsShader')
+if not file_exists('source/datasets/youtube/DaS/Vanilla/prompt.txt'):
+    os.system('python source/datasets/youtube/DaS/Vanilla/make_columns.py')
+if not folder_exists('diffusion_shader_model_CKPT'):
+    make_hardlink('diffusion_shader_model','diffusion_shader_model_CKPT',recursive=True)
+
+device = rp.select_torch_device(prefer_used=True)
+
+
+##########################
+# MAIN
+##########################
 
 for index in range(50):
     try:
