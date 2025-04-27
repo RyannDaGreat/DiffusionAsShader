@@ -330,16 +330,6 @@ class VideoDatasetWithResizingTracking(VideoDataset):
 
             frame_indices = list(range(0, video_num_frames, video_num_frames // nearest_frame_bucket))
 
-            # ic(
-            #     frame_indices,
-            #     video_reader,
-            #     video_num_frames,
-            #     nearest_frame_bucket,
-            #     self.frame_buckets,
-            #     path,
-            #     tracking_path,
-            # )
-
             frames = video_reader.get_batch(frame_indices)
             frames = frames[:nearest_frame_bucket].float()
             frames = frames.permute(0, 3, 1, 2).contiguous()
@@ -370,6 +360,28 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             counter_video_frames = counter_video_frames.permute(0, 3, 1, 2).contiguous()
             counter_video_frames_resized = torch.stack([resize(counter_video_frame, nearest_res) for counter_video_frame in counter_video_frames], dim=0)
             counter_video_frames = torch.stack([self.video_transforms(counter_video_frame) for counter_video_frame in counter_video_frames_resized], dim=0)
+
+            #VIDEO SPEED AUGMENTATION. IT'S CRUDE RIGHT NOW. BUT I NEED TO PROVE IT UNDERSTANDS FIRST/LAST FRAME IS NOT ALL THERE IS...
+            #NOTE: WE have a finite number of speeds to best benefit from our cache!
+            def regular_speed(video):
+                return video
+            #
+            def half_speed(video):
+                return rp.resize_list(video, len(video)*2)[:len(video)]
+            #
+            def two_thirds_speed(video):
+                return rp.resize_list(video, int(len(video)*1.5))[:len(video)]
+            #
+            VIDEO_SPEED = rp.random_choice(regular_speed,half_speed,two_thirds_speed)
+            COUNTER_SPEED = rp.random_choice(regular_speed,half_speed,two_thirds_speed)
+            rp.fansi_print(f'dataset.py: VIDEO_SPEED={VIDEO_SPEED.__name__}      COUNTER_SPEED={COUNTER_SPEED.__name__}','white blue on black gray italic')
+            #
+            video = VIDEO_SPEED(video)
+            tracking_frames = VIDEO_SPEED(tracking_frames)
+            #
+            counter_video_frames = VIDEO_SPEED(counter_video_frames)
+            counter_tracking_frames = VIDEO_SPEED(counter_tracking_frames)
+            
 
             return image, frames, tracking_frames, counter_tracking_frames, counter_video_frames, None
 

@@ -26,13 +26,14 @@ PORT=29500
 LEARNING_RATES=("1e-4")
 LR_SCHEDULES=("cosine_with_restarts")
 OPTIMIZERS=("adamw")
-MAX_TRAIN_STEPS=("100000")
+MAX_TRAIN_STEPS=("10000000")
 WARMUP_STEPS=100
 CHECKPOINT_STEPS=500
 CHECKPOINT_STEPS=50 #TINY MODE FOR TESTING: Use with source/checkpoint_pruner.py so you don't run out of harddrive space.
 TRAIN_BATCH_SIZE=2 
 
-RUN_NAME="CounterChans2500"
+# RUN_NAME="CounterChans2500"
+RUN_NAME="CounterChans_RandomSpeed_5000"
 
 # Single GPU uncompiled training
 ACCELERATE_CONFIG_FILE="accelerate_configs/uncompiled_2.yaml"

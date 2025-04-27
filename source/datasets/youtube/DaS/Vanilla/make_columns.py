@@ -16,7 +16,8 @@ from source.datasets.youtube.youtube_dataset import ProcessedYoutubeDataset
 dataset = ProcessedYoutubeDataset()
 
 # Right now just using 1000 samples so I can test the code and make sure it runs
-samples = rp.gather(dataset, range(2500))
+samples = rp.gather(dataset, range(5000))
+# samples = rp.gather(dataset, range(2500))
 # samples = rp.gather(dataset, range(10))
 
 def prepare_sample(sample):
