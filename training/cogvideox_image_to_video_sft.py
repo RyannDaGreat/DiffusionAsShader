@@ -23,6 +23,10 @@ import random
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict, Union, Optional
+import torch
+from torch import Tensor
+import hashlib
+
 
 import rp
 
@@ -662,39 +666,50 @@ def main(args):
                     counter_video_maps = batch["counter_video_maps"].to(accelerator.device, non_blocking=True)
                     counter_video_image = counter_video_maps[:,:1].clone()
 
-                def better_gpu_tensor_hash(tensor):
-                    # Get sum and mean values
-                    sum_val = tensor.sum().item()
-                    mean_val = tensor.mean().item()
-                    
-                    # Convert floats to their binary representation as integers
-                    import struct
-                    sum_int = struct.unpack('Q', struct.pack('d', float(sum_val)))[0]
-                    mean_int = struct.unpack('Q', struct.pack('d', float(mean_val)))[0]
-                    
-                    # Get shape hash
-                    shape_hash = hash(tensor.shape)
-                    
-                    # Combine using prime multipliers
-                    result = ((sum_int * 0x1fffffff) ^ 
-                            (mean_int * 0x01000193) ^ 
-                            (shape_hash * 0x0123456789ABCDEF)) & 0xFFFFFFFFFFFFFFFF
-                    
-                    return result
-                                
+
+                def _torch_tensor_to_bytes_for_hashing(tensor):
+                    #https://stackoverflow.com/questions/63880081/how-to-convert-a-torch-tensor-into-a-byte-string - not using numpy
+                    #This includes the device!
+                    import torch 
+                    import io
+                    buff = io.BytesIO()
+                    torch.save(tensor, buff)
+                    buff.seek(0)  # <--  this is what you were missing
+                    return buff.read()
+    
+                def bytes_to_base16(bytestring: bytes) -> str:
+                    import binascii
+                    return binascii.hexlify(bytestring).decode('utf-8')
+
+                def base16_to_bytes(base16_string: str) -> bytes:
+                    import binascii
+                    return binascii.unhexlify(base16_string)
+
+                def hash_tensor(x):
+                    return bytes_to_base16(hashlib.md5(_torch_tensor_to_bytes_for_hashing(x.detach().cpu())).digest())
+
                 def cached_vae_encode(tensor):
-                    hash_code = better_gpu_tensor_hash(tensor)
+                    hash_code = hash_tensor(tensor)
                     cache_folder='.vae_cache'
                     rp.make_folder(cache_folder)
                     file_path = f'{cache_folder}/{hash_code}.pth'
+
+                    loaded=False #Error handling in case something goes wrong...
                     if rp.file_exists(file_path):
                         rp.tic()
-                        output = torch.load(file_path)
-                        rp.fansi_print(f"Loaded VAE output from {file_path} in {rp.toc():.3} seconds",'white green bold italic on dark gray')
-                    else:
+                        try:
+                            output = torch.load(file_path)
+                            rp.fansi_print(f"Loaded VAE output from {file_path} in {rp.toc():.3} seconds",'white green bold italic on dark gray')
+                            loaded = True
+                        except Exception as e:
+                            rp.print_stack_trace()
+                    
+                    if not loaded:
+                        rp.tic()
                         output = vae.encode(tensor).latent_dist.sample()
                         torch.save(output, file_path)
                         rp.fansi_print(f"Saved VAE output to {file_path} in {rp.toc():.3} seconds",'white green cyan bold italic on dark gray')
+
                     output = output.to(dtype=tensor.dtype, device=tensor.device)
                     return output
 
