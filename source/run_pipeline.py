@@ -61,12 +61,13 @@ def get_maps(video_path):
         ]
     )
     maps = maps.to(device=device, dtype=torch.bfloat16)
-    first_frame = maps[0:1]  # Get first frame as [1, C, H, W]
-    height, width = first_frame.shape[2], first_frame.shape[3]
 
     print(f"Encoding tracking maps from {video_path}")
     maps = maps.unsqueeze(0)  # [B, T, C, H, W]
     maps = maps.permute(0, 2, 1, 3, 4)  # [B, C, T, H, W]
+    
+    maps = maps * 2 - 1 #Normalize from [0,1] to [-1, 1]
+    
     with torch.no_grad():
         latent_dist = pipe.vae.encode(maps).latent_dist
         maps = latent_dist.sample() * pipe.vae.config.scaling_factor
@@ -153,6 +154,24 @@ def run_test(index):
     counter_video_map_path    = get_absolute_path(counter_video_map_path   )
     output_video_path         = get_absolute_path(output_video_path        )
     output_preview_path       = get_absolute_path(output_preview_path      )
+    
+
+    if 0:
+        #Try to slow it down, for testing...
+        def make_halfspeed(video_path):
+            halfspeed_video_path = video_path+'_halfspeed.mp4'
+            #if file_exists(halfspeed_video_path):
+                #return halfspeed_video_path
+            video=load_video(video_path)
+            video=resize_list(video,len(video)*2)[:len(video)]
+            print('NEW VIDEO SHAPE:',video.shape)
+            save_video_mp4(video,halfspeed_video_path,video_bitrate='max')
+            return halfspeed_video_path
+        
+        video_path=make_halfspeed(video_path)
+        tracking_map_path=make_halfspeed(tracking_map_path)
+        output_video_path+='_halfspeed.mp4'
+        output_preview_path+='_halfspeed.mp4'
 
     video = run_pipe(**gather_vars('prompt video_path tracking_map_path counter_tracking_map_path counter_video_map_path'))
     
@@ -192,6 +211,7 @@ def run_test(index):
 
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans2500100000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-4500'
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-1100'
+checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-6000'
 checkpoint_title = get_folder_name(checkpoint_root)
 
 
