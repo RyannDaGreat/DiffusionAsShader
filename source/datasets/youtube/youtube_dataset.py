@@ -82,7 +82,7 @@ class GsSample:
     def delete_local(self):
         os.system("rm -rf " + shlex.quote(self.path))
         return self
-
+ 
     def release(self):
         self.upload()
         self.delete_local()
@@ -182,12 +182,29 @@ class ProcessedYoutubeGsSample(GsSample):
         self._create_properties(properties)
 
         self.video_480p49_path = self.path_join("video_480p49.mp4")
+        self.video_480p49_speed_1of2_path = self.path_join("video_480p49_speed=1|2.mp4")
 
     @cached_property
     def video_480p49(self):
         @rp.file_cache_wrap(self.video_480p49_path)
         def get_video():
-            return rp.resize_images(rp.resize_list(self.video, 49), size=(480, 720))
+            return rp.resize_images(self.video[:49], size=(480, 720))
+
+        return get_video()
+
+    @cached_property
+    def video_480p49_speed_1of2(self):
+        @rp.file_cache_wrap(self.video_480p49_speed_1of2_path)
+        def get_video():
+            return rp.resize_images(rp.resize_list(self.video, 49*2)[:49], size=(480, 720))
+
+        return get_video()
+
+    @cached_property
+    def video_480p49_speed_2of3(self):
+        @rp.file_cache_wrap(self.video_480p49_speed_1of2_path)
+        def get_video():
+            return rp.resize_images(rp.resize_list(self.video, int(49*1.5))[:49], size=(480, 720))
 
         return get_video()
 

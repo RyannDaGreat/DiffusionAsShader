@@ -191,6 +191,7 @@ def run_test(index):
 ##########################
 
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans2500100000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-4500'
+checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-1100'
 checkpoint_title = get_folder_name(checkpoint_root)
 
 
@@ -202,7 +203,7 @@ latest_transformer_checkpoint = syncutil.sync_checkpoint_folder(checkpoint_root)
 
 set_current_directory('/home/jupyter/CleanCode/Github/DiffusionAsShader')
 if not file_exists('source/datasets/youtube/DaS/Vanilla/prompt.txt'):
-    os.system('python source/datasets/youtube/DaS/Vanilla/make_columns.py')
+    rp.r._run_sys_command('python source/datasets/youtube/DaS/Vanilla/make_columns.py')
 if not folder_exists('diffusion_shader_model_CKPT'):
     make_hardlink('diffusion_shader_model','diffusion_shader_model_CKPT',recursive=True)
 

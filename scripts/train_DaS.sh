@@ -29,11 +29,16 @@ OPTIMIZERS=("adamw")
 MAX_TRAIN_STEPS=("10000000")
 WARMUP_STEPS=100
 CHECKPOINT_STEPS=500
-CHECKPOINT_STEPS=50 #TINY MODE FOR TESTING: Use with source/checkpoint_pruner.py so you don't run out of harddrive space.
+CHECKPOINT_STEPS=100 #TINY MODE FOR TESTING: Use with source/checkpoint_pruner.py so you don't run out of harddrive space.
 TRAIN_BATCH_SIZE=2 
 
-# RUN_NAME="CounterChans2500"
-RUN_NAME="CounterChans_RandomSpeed_5000"
+#Realized mistake - all last frames of counter and actual were same. We will train next from this.
+#Was trained on 2500 samples. Used channel concatenation.
+# RUN_NAME="CounterChans2500" #LAST TRAINED CHECKPOINT: /home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans2500100000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-5000
+
+#Picking up from CounterChans2500, we add speed augmentations to each one - crudely, resulting in duplicate frames. Crucially however it makes it so first/last frame is now always the same.
+RUN_NAME="CounterChans_RandomSpeed_10000"
+RUN_NAME="CounterChans_RandomSpeed_2500_" #might have corrupted shrunken 720p between 2500 and 5000 vids...
 
 # Single GPU uncompiled training
 ACCELERATE_CONFIG_FILE="accelerate_configs/uncompiled_2.yaml"

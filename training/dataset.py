@@ -372,11 +372,17 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             def two_thirds_speed(video):
                 return rp.resize_list(video, int(len(video)*1.5))[:len(video)]
             #
-            VIDEO_SPEED = rp.random_choice(regular_speed,half_speed,two_thirds_speed)
-            COUNTER_SPEED = rp.random_choice(regular_speed,half_speed,two_thirds_speed)
+            RANDOM_SPEED = [regular_speed,half_speed,two_thirds_speed]
+            RANDOM_SPEED = RANDOM_SPEED[rp.millis() % len(RANDOM_SPEED)]
+
+            #At least one will be full speed
+            VIDEO_SPEED, COUNTER_SPEED = regular_speed, RANDOM_SPEED
+            if rp.millis()%2:
+                VIDEO_SPEED, COUNTER_SPEED = [VIDEO_SPEED, COUNTER_SPEED][::-1]
+
             rp.fansi_print(f'dataset.py: VIDEO_SPEED={VIDEO_SPEED.__name__}      COUNTER_SPEED={COUNTER_SPEED.__name__}','white blue on black gray italic')
             #
-            video = VIDEO_SPEED(video)
+            frames = VIDEO_SPEED(frames)
             tracking_frames = VIDEO_SPEED(tracking_frames)
             #
             counter_video_frames = VIDEO_SPEED(counter_video_frames)
