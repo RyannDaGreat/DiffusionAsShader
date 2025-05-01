@@ -223,3 +223,4 @@ diffusion_shader_model
 .gradio
 node_modules
 package-lock.json
+source/demo_temporal_dropout_boolean_list.png
