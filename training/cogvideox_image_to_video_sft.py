@@ -748,44 +748,33 @@ def main(args):
                         counter_video_image_latent_dist = cached_vae_encode(counter_video_image)
 
                 else:
-                    latent_dist = DiagonalGaussianDistribution(videos)
-                    image_latent_dist = DiagonalGaussianDistribution(images)
+                    assert False
+                    # latent_dist = DiagonalGaussianDistribution(videos)
+                    # image_latent_dist = DiagonalGaussianDistribution(images)
 
-                image_latents = image_latent_dist * VAE_SCALING_FACTOR
-                image_latents = image_latents.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
-                image_latents = image_latents.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
+                def get_latents_from_dist(latent_dist):
+                    latent_dist = latent_dist * VAE_SCALING_FACTOR
+                    latent_dist = latent_dist.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
+                    latent_dist = latent_dist.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
+                    return latent_dist
 
-                video_latents = latent_dist * VAE_SCALING_FACTOR
-                video_latents = video_latents.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
-                video_latents = video_latents.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
+                def get_image_latents_from_dist(latent_dist, padding_shape):
+                    latent_dist = get_latents_from_dist(latent_dist)
+                    latent_padding = latent_dist.new_zeros(padding_shape)
+                    latents = torch.cat([latent_dist, latent_padding], dim=1)
+                    return latents
 
+                video_latents         = get_latents_from_dist(latent_dist                 )
+                tracking_maps         = get_latents_from_dist(tracking_latent_dist        )
+                counter_tracking_maps = get_latents_from_dist(counter_tracking_latent_dist)
+                counter_video_maps    = get_latents_from_dist(counter_video_latent_dist   )
+                
                 padding_shape = (video_latents.shape[0], video_latents.shape[1] - 1, *video_latents.shape[2:])
-                latent_padding = image_latents.new_zeros(padding_shape)
-                image_latents = torch.cat([image_latents, latent_padding], dim=1)
 
-                tracking_image_latent_dist = tracking_image_latent_dist * VAE_SCALING_FACTOR
-                tracking_image_latent_dist = tracking_image_latent_dist.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
-                tracking_image_latent_dist = tracking_image_latent_dist.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
-
-                tracking_latent_padding = tracking_image_latent_dist.new_zeros(padding_shape)
-                tracking_image_latents = torch.cat([tracking_image_latent_dist, tracking_latent_padding], dim=1)
-
-
-                counter_tracking_image_latent_dist = counter_tracking_image_latent_dist * VAE_SCALING_FACTOR
-                counter_tracking_image_latent_dist = counter_tracking_image_latent_dist.permute(0, 2, 1, 3, 4)  # [b, f, c, h, w]
-                counter_tracking_image_latent_dist = counter_tracking_image_latent_dist.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
-
-                counter_tracking_latent_padding = counter_tracking_image_latent_dist.new_zeros(padding_shape)
-                counter_tracking_image_latents = torch.cat([counter_tracking_image_latent_dist, counter_tracking_latent_padding], dim=1)
-
-
-                counter_video_image_latent_dist = counter_video_image_latent_dist * VAE_SCALING_FACTOR
-                counter_video_image_latent_dist = counter_video_image_latent_dist.permute(0, 2, 1, 3, 4)  # [b, f, c, h, w]
-                counter_video_image_latent_dist = counter_video_image_latent_dist.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
-
-                counter_video_latent_padding = counter_video_image_latent_dist.new_zeros(padding_shape)
-                counter_video_image_latents = torch.cat([counter_video_image_latent_dist, counter_video_latent_padding], dim=1)
-
+                image_latents                  = get_image_latents_from_dist(image_latent_dist                 , padding_shape)
+                tracking_image_latents         = get_image_latents_from_dist(tracking_image_latent_dist        , padding_shape)
+                counter_tracking_image_latents = get_image_latents_from_dist(counter_tracking_image_latent_dist, padding_shape)
+                counter_video_image_latents    = get_image_latents_from_dist(counter_video_image_latent_dist   , padding_shape)
 
                 if random.random() < args.noised_image_dropout:
                     image_latents = torch.zeros_like(image_latents)
@@ -793,20 +782,7 @@ def main(args):
                     counter_tracking_image_latents = torch.zeros_like(counter_tracking_image_latents)
                     counter_video_image_latents = torch.zeros_like(counter_video_image_latents)
 
-                if args.tracking_column is not None:
-                    tracking_maps = tracking_latent_dist * VAE_SCALING_FACTOR
-                    tracking_maps = tracking_maps.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
-                    tracking_maps = tracking_maps.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
 
-                if args.counter_tracking_column is not None:
-                    counter_tracking_maps = counter_tracking_latent_dist * VAE_SCALING_FACTOR
-                    counter_tracking_maps = counter_tracking_maps.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
-                    counter_tracking_maps = counter_tracking_maps.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
-
-                if args.counter_video_column is not None:
-                    counter_video_maps = counter_video_latent_dist * VAE_SCALING_FACTOR
-                    counter_video_maps = counter_video_maps.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
-                    counter_video_maps = counter_video_maps.to(memory_format=torch.contiguous_format, dtype=weight_dtype)
 
                 # Encode prompts
                 if not args.load_tensors:
