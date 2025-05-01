@@ -78,6 +78,8 @@ from models.cogvideox_tracking import CogVideoXImageToVideoPipelineTracking
 from models.cogvideox_tracking import CogVideoXTransformer3DModelTracking
 # from models.cogvideox_tracking import CogVideoXPipelineTracking
 
+from source.temporal_dropout import temporal_dropout_boolean_list
+
 logger = get_logger(__name__)
 
 class CollateFunctionImageTracking:
@@ -782,6 +784,24 @@ def main(args):
                     counter_tracking_image_latents = torch.zeros_like(counter_tracking_image_latents)
                     counter_video_image_latents = torch.zeros_like(counter_video_image_latents)
 
+
+                DO_TEMPORAL_DROPOUT=True #TODO: Make this an arg
+                if DO_TEMPORAL_DROPOUT:
+                    B, LT, LC, LH, LW = video_latents.shape
+
+                    #Get the latent frames we'll be discarding...
+                    temporal_dropout = temporal_dropout_boolean_list(LT, .25)
+
+                    rp.fansi_print(f"DO_TEMPORAL_DROPOUT: temporal_dropout = {''.join(map(str,map(int,temporal_dropout)))}", 'orange italic on dark dark blue')
+
+                    #Disable image conditioning most of the time
+                    if rp.random_chance(.9):
+                        image_latents               = image_latents               * 0
+                        counter_video_image_latents = counter_video_image_latents * 0
+
+                    for t, keep in enumerate(temporal_dropout):
+                        if not keep:
+                            counter_video_maps[t] = 0
 
 
                 # Encode prompts

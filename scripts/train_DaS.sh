@@ -39,6 +39,7 @@ TRAIN_BATCH_SIZE=2
 #Picking up from CounterChans2500, we add speed augmentations to each one - crudely, resulting in duplicate frames. Crucially however it makes it so first/last frame is now always the same.
 RUN_NAME="CounterChans_RandomSpeed_10000"
 RUN_NAME="CounterChans_RandomSpeed_2500_" #might have corrupted shrunken 720p between 2500 and 5000 vids...
+RUN_NAME="CounterChans_RandomSpeed_WithDropout_2500_" #might have corrupted shrunken 720p between 2500 and 5000 vids...
 
 # Single GPU uncompiled training
 ACCELERATE_CONFIG_FILE="accelerate_configs/uncompiled_2.yaml"
