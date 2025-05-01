@@ -1,6 +1,12 @@
 #!/bin/bash
 
-#Ryan: Please run this from the PARENT of the scripts directory!
+'
+Ryan: Please run this from the PARENT of the scripts directory!
+!
+cd ~/CleanCode/Github/DiffusionAsShader
+bash ~/CleanCode/Management/sync_projects.bash
+bash ./scripts/train_DaS.sh
+'
 
 python ./source/datasets/youtube/DaS/Vanilla/make_columns.py
 #That generates the following files:
