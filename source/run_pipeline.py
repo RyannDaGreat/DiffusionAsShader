@@ -25,6 +25,7 @@ sys.path += rp.get_absolute_paths(
 
 import syncutil
 
+device = rp.select_torch_device(prefer_used=True, reserve=True)
 
 ##########################
 # FUNCTIONS
@@ -82,6 +83,7 @@ def image_form(image):
     image=as_rgb_image(image)
     return as_pil_image(image)
 
+@globalize_locals
 def run_pipe(
     prompt                    = "A soccer player from Hertha BSC is in the field with the ball while an opposing player is running towards him.",
     video_path                = "~/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/video.mp4",
@@ -115,10 +117,21 @@ def run_pipe(
         "num_inference_steps" : 30,
     }
 
+    pipeline_args |= dict(          
+        use_image_conditioning=True,
+        latent_conditioning_dropout=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+
+        #use_image_conditioning=False,
+        # latent_conditioning_dropout=[0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+        #latent_conditioning_dropout=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    )
+
     with torch.no_grad():
         results=pipe(**pipeline_args)
     
     video=results.frames[0]
+    video=as_numpy_images(video)
+    video = labeled_images(video,f"{''.join(map(str,pipeline_args['latent_conditioning_dropout']))}",size=-15,background_color='translucent dark blue')
     return video
 
 @globalize_locals
@@ -156,7 +169,7 @@ def run_test(index):
     output_preview_path       = get_absolute_path(output_preview_path      )
     
 
-    if 0:
+    if 1:
         #Try to slow it down, for testing...
         def make_halfspeed(video_path):
             halfspeed_video_path = video_path+'_halfspeed.mp4'
@@ -164,14 +177,31 @@ def run_test(index):
                 #return halfspeed_video_path
             video=load_video(video_path)
             video=resize_list(video,len(video)*2)[:len(video)]
-            print('NEW VIDEO SHAPE:',video.shape)
+            print('make_halfspeed: NEW VIDEO SHAPE:',video.shape)
+            save_video_mp4(video,halfspeed_video_path,video_bitrate='max')
+            return halfspeed_video_path
+
+        #Try to reverse it, for testing...
+        def make_reversed(video_path):
+            halfspeed_video_path = video_path+'_reversed.mp4'
+            video=load_video(video_path)
+            video=video[::-1]
+            print('make_reversed: NEW VIDEO SHAPE:',video.shape)
             save_video_mp4(video,halfspeed_video_path,video_bitrate='max')
             return halfspeed_video_path
         
-        video_path=make_halfspeed(video_path)
-        tracking_map_path=make_halfspeed(tracking_map_path)
-        output_video_path+='_halfspeed.mp4'
-        output_preview_path+='_halfspeed.mp4'
+        
+        # video_path=make_halfspeed(video_path)
+        # tracking_map_path=make_halfspeed(tracking_map_path)
+        # output_video_path+='_halfspeed.mp4'
+        # output_preview_path+='_halfspeed.mp4'
+
+
+        counter_video_map_path = make_reversed(counter_video_map_path)
+        counter_tracking_map_path = make_reversed(counter_tracking_map_path)
+        output_video_path+='_reverse.mp4'
+        output_preview_path+='_reverse.mp4'
+
 
     video = run_pipe(**gather_vars('prompt video_path tracking_map_path counter_tracking_map_path counter_video_map_path'))
     
@@ -212,6 +242,9 @@ def run_test(index):
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans2500100000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-4500'
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-1100'
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-6000'
+checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-3000'
+checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-9200'
+checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-14700'
 checkpoint_title = get_folder_name(checkpoint_root)
 
 
@@ -226,8 +259,6 @@ if not file_exists('source/datasets/youtube/DaS/Vanilla/prompt.txt'):
     rp.r._run_sys_command('python source/datasets/youtube/DaS/Vanilla/make_columns.py')
 if not folder_exists('diffusion_shader_model_CKPT'):
     make_hardlink('diffusion_shader_model','diffusion_shader_model_CKPT',recursive=True)
-
-device = rp.select_torch_device(prefer_used=True)
 
 if "pipe" not in vars():
     update_to_latest_checkpoint()
@@ -248,7 +279,12 @@ if "pipe" not in vars():
 # MAIN
 ##########################
 
-for index in range(50):
+num_videos = 50
+index_offset = int(device.index) * num_videos // 8
+for index in range(num_videos):
+    index += index_offset
+    index %= num_videos
+
     try:
         run_test(index)
     except Exception:

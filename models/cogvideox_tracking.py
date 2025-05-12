@@ -921,6 +921,8 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
         counter_tracking_image: torch.Tensor=None,
         counter_video_maps: torch.Tensor=None,
         counter_video_image: torch.Tensor=None,
+        use_image_conditioning = True,
+        latent_conditioning_dropout = [1,1,1,1,1,1,1,1,1,1,1,1,1],
     ) -> Union[CogVideoXPipelineOutput, Tuple]:
         # Most of the implementation remains the same as the parent class
         # We will modify the parts that need to handle tracking_maps
@@ -931,6 +933,7 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
         assert counter_tracking_image is not None
         assert counter_video_maps is not None
         assert counter_video_image is not None
+        assert len(latent_conditioning_dropout) == 13
 
 
         # 1. Check inputs and set default values
@@ -984,21 +987,16 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
         # 5. Prepare latents
         # Process the input image - the image to use as first frame reference [B, C, H, W]
         # This is a single image (e.g., the first frame of the desired video)
-        image = self.video_processor.preprocess(image, height=height, width=width).to(
-            device, dtype=prompt_embeds.dtype
-        )
 
-        # Process the tracking first frame image [B, C, H, W]
-        # This is a single image (first frame of the tracking video)
-        tracking_image = self.video_processor.preprocess(tracking_image, height=height, width=width).to(
-            device, dtype=prompt_embeds.dtype
-        )
-        counter_tracking_image = self.video_processor.preprocess(counter_tracking_image, height=height, width=width).to(
-            device, dtype=prompt_embeds.dtype
-        )
-        counter_video_image = self.video_processor.preprocess(counter_video_image, height=height, width=width).to(
-            device, dtype=prompt_embeds.dtype
-        )
+        image                  = self.video_processor.preprocess(image                 , height=height, width=width).to(device, dtype=prompt_embeds.dtype)
+        tracking_image         = self.video_processor.preprocess(tracking_image        , height=height, width=width).to(device, dtype=prompt_embeds.dtype)
+        counter_tracking_image = self.video_processor.preprocess(counter_tracking_image, height=height, width=width).to(device, dtype=prompt_embeds.dtype)
+        counter_video_image    = self.video_processor.preprocess(counter_video_image   , height=height, width=width).to(device, dtype=prompt_embeds.dtype)
+
+        if not use_image_conditioning:
+            image = image * 0
+            counter_video_image = counter_video_image * 0
+
         if self.transformer.config.in_channels != 16:
             latent_channels = self.transformer.config.in_channels // 2
         else:
@@ -1058,6 +1056,11 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
             generator,
             latents=None,
         )
+
+        for frame_number, keep in enumerate(latent_conditioning_dropout):
+            if not keep:
+                print("Discarding counterfactual frame",frame_number, 'with shape',counter_video_maps.shape)
+                counter_video_maps[:,frame_number] = 0
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)

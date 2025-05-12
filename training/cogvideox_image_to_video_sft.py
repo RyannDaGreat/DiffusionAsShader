@@ -80,6 +80,43 @@ from models.cogvideox_tracking import CogVideoXTransformer3DModelTracking
 
 from source.temporal_dropout import temporal_dropout_boolean_list
 
+def truly_random_float():
+    #Returns random float between 0 and 1 by turning 64 bytes from secrets module into float
+    import secrets
+    import struct
+    
+    # Get 8 bytes of random data
+    random_bytes = secrets.token_bytes(8)
+    
+    # Convert to a float between 0 and 1
+    # Unpack as unsigned long long (8 bytes), then divide by maximum value
+    return struct.unpack('Q', random_bytes)[0] / (2**64 - 1)
+
+def truly_random_int(min, max):
+    #Returns random integer between min and max (inclusive) using secrets module
+    import secrets
+    import math
+    
+    # Calculate range size and required number of bytes
+    range_size = max - min + 1
+    # Calculate how many bits we need
+    bits_needed = math.ceil(math.log2(range_size))
+    # Calculate bytes needed (minimum 1)
+    bytes_needed = math.ceil(bits_needed / 8)
+    
+    # Get random bytes
+    random_bytes = secrets.token_bytes(bytes_needed)
+    
+    # Convert to an integer
+    random_int = int.from_bytes(random_bytes, byteorder='big')
+    
+    # Map to our range and return
+    return min + (random_int % range_size)
+
+def truly_random_seed():
+    import random
+    random.seed(truly_random_int(0,100000))
+
 logger = get_logger(__name__)
 
 class CollateFunctionImageTracking:
@@ -789,6 +826,8 @@ def main(args):
                 if DO_TEMPORAL_DROPOUT:
                     B, LT, LC, LH, LW = video_latents.shape
 
+                    truly_random_seed()
+
                     #Get the latent frames we'll be discarding...
                     temporal_dropout = temporal_dropout_boolean_list(LT, .25)
 
@@ -801,7 +840,7 @@ def main(args):
 
                     for t, keep in enumerate(temporal_dropout):
                         if not keep:
-                            counter_video_maps[t] = 0
+                            counter_video_maps[:, t] = 0
 
 
                 # Encode prompts
