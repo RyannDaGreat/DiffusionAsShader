@@ -26,6 +26,16 @@ def prepare_sample(sample):
         sample.upload()
 
 rp.load_files(
+    #Download because the next one doesn't run in parallel for some reason...
+    lambda sample: sample.download() if not rp.folder_exists(sample.path) else None,
+    samples,
+    show_progress=True,
+    strict=True,
+    num_threads=100,
+)
+
+rp.load_files(
+    #For some reason this doesn't run in parallel...
     prepare_sample,
     samples,
     show_progress=True,
