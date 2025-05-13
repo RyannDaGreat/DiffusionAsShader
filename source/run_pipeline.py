@@ -99,6 +99,9 @@ def run_pipe(
         counter_video_map_path,
     )
 
+    # prompt = ''
+    # fansi_print("LOOK MA NO PROMPT",'blue')
+
     pipeline_args = {
         "prompt"                 : prompt,
         "image"                  : load_video_first_frame(video_path),
@@ -113,25 +116,35 @@ def run_pipe(
         "width"               : 720,
         "num_frames"          : 49,
         "use_dynamic_cfg"     : True,
-        "guidance_scale"      : 6,
+        "guidance_scale"      : 3, #6 was default; 3 looks better
         "num_inference_steps" : 30,
     }
 
     pipeline_args |= dict(          
-        use_image_conditioning=True,
-        latent_conditioning_dropout=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        # use_image_conditioning=True,
+        # latent_conditioning_dropout=[0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
 
-        #use_image_conditioning=False,
-        # latent_conditioning_dropout=[0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+        use_image_conditioning=False,
+        # latent_conditioning_dropout=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        latent_conditioning_dropout=[0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+        # latent_conditioning_dropout=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
         #latent_conditioning_dropout=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     )
+
+    pipeline_args = rp.as_easydict(pipeline_args)
 
     with torch.no_grad():
         results=pipe(**pipeline_args)
     
     video=results.frames[0]
     video=as_numpy_images(video)
-    video = labeled_images(video,f"{''.join(map(str,pipeline_args['latent_conditioning_dropout']))}",size=-15,background_color='translucent dark blue')
+    video = labeled_images(
+        video,
+        f"PROMPT={repr(prompt[:50])}\nCFG={pipeline_args.guidance_scale} DYN-CFG={pipeline_args.use_dynamic_cfg} STEPS={pipeline_args.num_inference_steps} {''.join(map(str,pipeline_args['latent_conditioning_dropout']))}",
+        size=-25,
+        background_color="translucent dark blue",
+        size_by_lines=False,
+    )
     return video
 
 @globalize_locals
@@ -191,16 +204,20 @@ def run_test(index):
             return halfspeed_video_path
         
         
-        # video_path=make_halfspeed(video_path)
-        # tracking_map_path=make_halfspeed(tracking_map_path)
-        # output_video_path+='_halfspeed.mp4'
-        # output_preview_path+='_halfspeed.mp4'
+        video_path=make_halfspeed(video_path)
+        tracking_map_path=make_halfspeed(tracking_map_path)
+        output_video_path+='_halfspeed.mp4'
+        output_preview_path+='_halfspeed.mp4'
 
+        # counter_video_map_path = make_reversed(video_path)
+        # counter_tracking_map_path = make_reversed(tracking_map_path)
+        # output_video_path+='_reverseOrig.mp4'
+        # output_preview_path+='_reverseOrig.mp4'
 
-        counter_video_map_path = make_reversed(counter_video_map_path)
-        counter_tracking_map_path = make_reversed(counter_tracking_map_path)
-        output_video_path+='_reverse.mp4'
-        output_preview_path+='_reverse.mp4'
+        # counter_video_map_path = make_reversed(counter_video_map_path)
+        # counter_tracking_map_path = make_reversed(counter_tracking_map_path)
+        # output_video_path+='_reverse.mp4'
+        # output_preview_path+='_reverse.mp4'
 
 
     video = run_pipe(**gather_vars('prompt video_path tracking_map_path counter_tracking_map_path counter_video_map_path'))
@@ -245,6 +262,7 @@ checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_c
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-3000'
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-9200'
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-14700'
+checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-29000'
 checkpoint_title = get_folder_name(checkpoint_root)
 
 
@@ -279,7 +297,7 @@ if "pipe" not in vars():
 # MAIN
 ##########################
 
-num_videos = 50
+num_videos = 250
 index_offset = int(device.index) * num_videos // 8
 for index in range(num_videos):
     index += index_offset
