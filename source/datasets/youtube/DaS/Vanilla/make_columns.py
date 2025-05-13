@@ -16,8 +16,9 @@ from source.datasets.youtube.youtube_dataset import ProcessedYoutubeDataset
 dataset = ProcessedYoutubeDataset()
 
 # Right now just using 1000 samples so I can test the code and make sure it runs
+samples = rp.gather(dataset, range(25000))
 # samples = rp.gather(dataset, range(10000))
-samples = rp.gather(dataset, range(2500))
+# samples = rp.gather(dataset, range(2500))
 # samples = rp.gather(dataset, range(10))
 
 def prepare_sample(sample):
@@ -50,6 +51,13 @@ videos            = [x.video_480p49_path                 for x in samples]
 trackings         = [x.video_dasTrackvid_path            for x in samples]
 counter_trackings = [x.cogxCounterVideo_dasTrackvid_path for x in samples]
 counter_videos    = [x.cogxCounterVideo_path             for x in samples]
+
+#Add null-prompts to training - 50% chance
+prompt += [''] * len(prompt)
+videos            *= 2
+trackings         *= 2
+counter_trackings *= 2
+counter_videos    *= 2
 
 prompt_path            = rp.save_file_lines(prompt           , rp.path_join(root, "prompt.txt"           ))
 videos_path            = rp.save_file_lines(videos           , rp.path_join(root, "videos.txt"           ))
