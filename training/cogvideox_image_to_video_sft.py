@@ -816,10 +816,10 @@ def main(args):
                 counter_video_image_latents    = get_image_latents_from_dist(counter_video_image_latent_dist   , padding_shape)
 
                 if random.random() < args.noised_image_dropout:
-                    image_latents = torch.zeros_like(image_latents)
-                    tracking_image_latents = torch.zeros_like(tracking_image_latents)
+                    image_latents                  = torch.zeros_like(image_latents)
+                    tracking_image_latents         = torch.zeros_like(tracking_image_latents)
                     counter_tracking_image_latents = torch.zeros_like(counter_tracking_image_latents)
-                    counter_video_image_latents = torch.zeros_like(counter_video_image_latents)
+                    counter_video_image_latents    = torch.zeros_like(counter_video_image_latents)
 
 
                 DO_TEMPORAL_DROPOUT=True #TODO: Make this an arg
@@ -835,8 +835,9 @@ def main(args):
 
                     #Disable image conditioning most of the time
                     if rp.random_chance(.9):
-                        image_latents               = image_latents               * 0
-                        counter_video_image_latents = counter_video_image_latents * 0
+                        image_latents               = torch.zeros_like(image_latents)
+                        counter_video_image_latents = torch.zeros_like(counter_video_image_latents)
+
 
                     for t, keep in enumerate(temporal_dropout):
                         if not keep:
