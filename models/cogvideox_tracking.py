@@ -785,7 +785,7 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                     param.requires_grad = True
                 
             for param in model.initial_combine_linear.parameters():
-                param.requires_grad = Tru
+                param.requires_grad = True
                 
                 if os.environ['DISABLE_CONTROLNET']:
                     param.zero_()

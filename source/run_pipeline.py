@@ -296,6 +296,11 @@ USE_T2V=True
 if USE_T2V:
     os.environ['T2V_TRANSFORMER_CHECKPOINT'] = "/home/jupyter/CleanCode/Huggingface/CogVideoX-5b/transformer"
 
+NO_CONTROLNET=False
+if NO_CONTROLNET:
+    os.environ['DISABLE_CONTROLNET'] = "True"
+
+
 ##########################
 # SETUP
 ##########################
