@@ -785,7 +785,11 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                     param.requires_grad = True
                 
             for param in model.initial_combine_linear.parameters():
-                param.requires_grad = True
+                param.requires_grad = Tru
+                
+                if os.environ['DISABLE_CONTROLNET']:
+                    param.zero_()
+                    rp.fansi_print(f"DISABLE_CONTROLNET: Zeroing - {(param**2).sum()}",'yellow faded')
         
             for param in model.second_patch_embed.proj.parameters():
                 param.requires_grad = True
