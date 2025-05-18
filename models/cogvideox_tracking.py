@@ -722,25 +722,23 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
+        if 'T2V_TRANSFORMER_CHECKPOINT' in os.environ:
+            t2v_path = os.environ['T2V_TRANSFORMER_CHECKPOINT']
+            rp.fansi_print(f'USING T2V CHECKPOINT TOO! t2v_path={t2v_path}','white blue cyan bold underlined on dark dark gray yellow green')
         try:
-            if ';' in pretrained_model_name_or_path:
-                pretrained_model_name_or_path, t2v_path = pretrained_model_name_or_path.split(';')
-                rp.fansi_print(f'USING T2V CHECKPOINT TOO! t2v_path={t2v_path}   AND    pretrained_model_name_or_path={pretrained_model_name_or_path}','white blue cyan bold underlined on dark dark gray yellow green')
-
             model = super().from_pretrained(pretrained_model_name_or_path, **kwargs)
             print("Loaded DiffusionAsShader checkpoint directly.")
 
-            def i2v_to_t2v(transformer):
-                import rp
-                transformer_root = "/home/jupyter/CleanCode/Checkpoints/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-14700/transformer"
-                transformer_root = "/home/jupyter/CleanCode/Huggingface/CogVideoX-5b/transformer"
-                safetensor_paths = rp.get_all_files(transformer_root, file_extension_filter="safetensors")
+            def i2v_to_t2v(transformer, t2v_transformer_root="/home/jupyter/CleanCode/Huggingface/CogVideoX-5b/transformer"):
+                # t2v_transformer_root = "/home/jupyter/CleanCode/Checkpoints/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-14700/transformer"
+                # t2v_transformer_root = "/home/jupyter/CleanCode/Huggingface/CogVideoX-5b/transformer"
+                safetensor_paths = rp.get_all_files(t2v_transformer_root, file_extension_filter="safetensors")
                 
                 # Announce
                 rp.fansi_print(
-                    f"i2v_to_t2v: Loading Safetensors from {transformer_root}\n"
+                    f"i2v_to_t2v: Loading Safetensors from {t2v_transformer_root}\n"
                     + rp.indentify(
-                        rp.line_join(rp.get_relative_paths(safetensor_paths, root=transformer_root)), "    • "
+                        rp.line_join(rp.get_relative_paths(safetensor_paths, root=t2v_transformer_root)), "    • "
                     ),
                     "light gray cyan blue",
                     truecolor=True,
