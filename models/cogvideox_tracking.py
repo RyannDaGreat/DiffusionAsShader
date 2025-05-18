@@ -301,7 +301,6 @@ class OriginalCogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, M
             
             for param in model.parameters():
                 param.requires_grad = False
-            
             for linear in model.combine_linears:
                 for param in linear.parameters():
                     param.requires_grad = True
@@ -621,7 +620,7 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
 
         # Process tracking maps - apply the same transformation
         prompt_embed = encoder_hidden_states.clone()
-        tracking_maps_hidden_states = self.second_patch_embed(prompt_embed, control_maps) #MINIMAL CHANGE: Not yet renaming the rest of tracking_* vars to control_* varnames to minimize diff
+        tracking_maps_hidden_states = self.second_patch_embed(prompt_embed, control_maps)
         tracking_maps_hidden_states = self.embedding_dropout(tracking_maps_hidden_states)
         del prompt_embed
 
@@ -724,9 +723,56 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
         try:
+            if ';' in pretrained_model_name_or_path:
+                pretrained_model_name_or_path, t2v_path = pretrained_model_name_or_path.split(';')
+                rp.fansi_print(f'USING T2V CHECKPOINT TOO! t2v_path={t2v_path}   AND    pretrained_model_name_or_path={pretrained_model_name_or_path}','white blue cyan bold underlined on dark dark gray yellow green')
+
             model = super().from_pretrained(pretrained_model_name_or_path, **kwargs)
             print("Loaded DiffusionAsShader checkpoint directly.")
-            
+
+            def i2v_to_t2v(transformer):
+                import rp
+                transformer_root = "/home/jupyter/CleanCode/Checkpoints/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-14700/transformer"
+                transformer_root = "/home/jupyter/CleanCode/Huggingface/CogVideoX-5b/transformer"
+                safetensor_paths = rp.get_all_files(transformer_root, file_extension_filter="safetensors")
+                
+                # Announce
+                rp.fansi_print(
+                    f"i2v_to_t2v: Loading Safetensors from {transformer_root}\n"
+                    + rp.indentify(
+                        rp.line_join(rp.get_relative_paths(safetensor_paths, root=transformer_root)), "    • "
+                    ),
+                    "light gray cyan blue",
+                    truecolor=True,
+                )
+                
+                merged_safetensors= rp.merged_dicts(
+                    [rp.load_safetensors(x) for x in rp.eta(safetensor_paths, "Loading Safetensors")]
+                )
+                
+                #Correct the number of channels in the T2V model if needed; by padding zeros - effecively turning it into a T2V model
+                assert 'patch_embed.proj.weight' in merged_safetensors
+                weight = merged_safetensors['patch_embed.proj.weight']
+                if list(weight.shape)==[3072, 16, 2, 2]:
+                    new_weight = torch.zeros([3072, 32, 2, 2], dtype=weight.dtype, device=weight.device)
+                    new_weight[:,:16] = weight
+                    merged_safetensors['patch_embed.proj.weight'] = new_weight
+                    rp.fansi_print(f"i2v_to_t2v: Expanded patch_embed.proj.weight from {weight.shape} to {new_weight.shape}", 'yellow')
+                
+                if hasattr(transformer,'_orig_mod'):
+                    #https://github.com/karpathy/nanoGPT/issues/325
+                    rp.fansi_print('i2v_to_t2v: Using transformer._orig_mod','yellow')
+                    transformer=transformer._orig_mod
+                
+                #OK...load in the T2V weights!
+                status = transformer.load_state_dict(merged_safetensors, strict=False)
+                
+                #IMPORTANT! If we're switching to CogX T2V from an I2V model you have to do this!
+                transformer.patch_embed.use_learned_positional_embeddings=False
+                rp.fansi_print(f"i2v_to_t2v: Disabled use_learned_positional_embeddings!", 'yellow')
+                
+                rp.fansi_print(f'i2v_to_t2v: {status}','yellow')
+
             # Freeze all parameters
             for param in model.parameters():
                 param.requires_grad = False
@@ -746,7 +792,15 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
             for param in model.second_patch_embed.proj.parameters():
                 param.requires_grad = True
             
-            return model
+            if 't2v_path' in vars():
+                rp.fansi_print(f'LOADING T2V CHECKPOINT OVERRIDE: t2v_path={t2v_path}','white blue cyan bold underlined on dark dark gray yellow green')
+                i2v_to_t2v(model)
+
+                #Super important we do this!
+                model.patch_embed       .use_learned_positional_embeddings=False
+                model.second_patch_embed.use_learned_positional_embeddings=False
+
+            return model 
         
         except Exception as e:
             # assert False, f'We should be initializing from a DiffusionAsShader checkpoint, not an initial I2V checkpoint... pretrained_model_name_or_path = {pretrained_model_name_or_path}'
