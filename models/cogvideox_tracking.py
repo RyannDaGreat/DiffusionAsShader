@@ -771,25 +771,28 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                 
                 rp.fansi_print(f'i2v_to_t2v: {status}','yellow')
 
+            def maybe_zero(param):
+                if os.environ.get('DISABLE_CONTROLNET'):
+                    param.zero_()
+                    rp.fansi_print(f"DISABLE_CONTROLNET: Zeroing - {(param**2).sum()}", "red red bold on yellow yellow")
+
             # Freeze all parameters
             for param in model.parameters():
                 param.requires_grad = False
             
             # Unfreeze parameters that need to be trained
-            for linear in model.combine_linears:
-                for param in linear.parameters():
-                    param.requires_grad = True
-                
             for block in model.transformer_blocks_copy:
                 for param in block.parameters():
                     param.requires_grad = True
                 
-            for param in model.initial_combine_linear.parameters():
-                param.requires_grad = True
+            for linear in model.combine_linears:
+                for param in linear.parameters():
+                    maybe_zero(param)
+                    param.requires_grad = True
                 
-                if os.environ['DISABLE_CONTROLNET']:
-                    param.zero_()
-                    rp.fansi_print(f"DISABLE_CONTROLNET: Zeroing - {(param**2).sum()}",'yellow faded')
+            for param in model.initial_combine_linear.parameters():
+                maybe_zero(param)
+                param.requires_grad = True
         
             for param in model.second_patch_embed.proj.parameters():
                 param.requires_grad = True
