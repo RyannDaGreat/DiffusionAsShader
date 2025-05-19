@@ -12,6 +12,8 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from torchvision.transforms.functional import resize
 
+from source.video_augmentor import augment_videos
+
 from icecream import ic
 import rp
 
@@ -361,6 +363,9 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             counter_video_frames_resized = torch.stack([resize(counter_video_frame, nearest_res) for counter_video_frame in counter_video_frames], dim=0)
             counter_video_frames = torch.stack([self.video_transforms(counter_video_frame) for counter_video_frame in counter_video_frames_resized], dim=0)
 
+            import random
+            random.seed(rp.millis())
+
             #VIDEO SPEED AUGMENTATION. IT'S CRUDE RIGHT NOW. BUT I NEED TO PROVE IT UNDERSTANDS FIRST/LAST FRAME IS NOT ALL THERE IS...
             #NOTE: WE have a finite number of speeds to best benefit from our cache!
             def regular_speed(video):
@@ -372,12 +377,18 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             def two_thirds_speed(video):
                 return rp.resize_list(video, int(len(video)*1.5))[:len(video)]
             #
-            RANDOM_SPEED = [regular_speed,half_speed,two_thirds_speed]
-            RANDOM_SPEED = RANDOM_SPEED[rp.millis() % len(RANDOM_SPEED)]
+            def half_speed_second_half(video):
+                return rp.resize_list(video, len(video)*2)[len(video):]
+            #
+            def two_thirds_speed_later_half(video):
+                return rp.resize_list(video, int(len(video)*1.5))[len(video):]
+            #
+            RANDOM_SPEED = [regular_speed,half_speed,two_thirds_speed, half_speed_second_half, two_thirds_speed_later_half]
+            RANDOM_SPEED = rp.random_element(RANDOM_SPEED)
 
             #At least one will be full speed
             VIDEO_SPEED, COUNTER_SPEED = regular_speed, RANDOM_SPEED
-            if rp.millis()%2:
+            if rp.random_chance():
                 VIDEO_SPEED, COUNTER_SPEED = [VIDEO_SPEED, COUNTER_SPEED][::-1]
 
             rp.fansi_print(f'dataset.py: VIDEO_SPEED={VIDEO_SPEED.__name__}      COUNTER_SPEED={COUNTER_SPEED.__name__}','white blue on black gray italic')
@@ -387,8 +398,36 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             #
             counter_video_frames = VIDEO_SPEED(counter_video_frames)
             counter_tracking_frames = VIDEO_SPEED(counter_tracking_frames)
-            
 
+            #Random Reversals
+            if rp.random_chance():
+                rp.fansi_print(f"dataset.py: REVERSING GROUND TRUTH", "white blue on black gray italic")
+                frames          = frames         [::-1]
+                tracking_frames = tracking_frames[::-1]
+            if rp.random_chance():
+                rp.fansi_print(f"dataset.py: REVERSING COUNTERFACTUALS", "white blue on black gray italic")
+                counter_video_frames    = counter_video_frames   [::-1]
+                counter_tracking_frames = counter_tracking_frames[::-1]
+
+            #Random Sliding Crops
+            if rp.random_chance(.2):
+                rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
+                frames, tracking_frames = augment_videos(frames, tracking_frames)
+            if rp.random_chance(.2):
+                rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
+                counter_video_frames, counter_tracking_frames = augment_videos(counter_video_frames, counter_tracking_frames)
+
+            if rp.random_chance(1/200):
+                try:
+                    rp.make_directory(".random_dataset_samples")
+                    dataset_audit_path = f".random_dataset_samples/sample_{rp.random_int(100)}.pkl" #Don't save a total of more than 100 samples so we have no disk leaks
+                    dataset_audit_path = rp.get_absolute_path(dataset_audit_path)
+                    rp.fansi_print(f"SAVING RANDOM DATASET SAMPLE TO {dataset_audit_path}", "green red white bold underdouble")
+                    sample = image, frames, tracking_frames, counter_tracking_frames, counter_video_frames
+                    rp.object_to_file(sample, dataset_audit_path)
+                except Exception:
+                    rp.print_stack_trace()
+            
             return image, frames, tracking_frames, counter_tracking_frames, counter_video_frames, None
 
     def _find_nearest_resolution(self, height, width):
