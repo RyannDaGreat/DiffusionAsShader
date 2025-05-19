@@ -8,6 +8,16 @@ bash ~/CleanCode/Management/sync_projects.bash
 bash ./scripts/train_DaS.sh
 '
 
+##########################
+##### EXTRA SETTINGS #####
+##########################
+
+export T2V_TRANSFORMER_CHECKPOINT="/home/jupyter/CleanCode/Huggingface/CogVideoX-5b/transformer"
+
+#####################
+
+
+
 python ./source/datasets/youtube/DaS/Vanilla/make_columns.py
 #That generates the following files:
 #    ./source/datasets/youtube/DaS/Vanilla/prompt.txt
@@ -46,6 +56,7 @@ TRAIN_BATCH_SIZE=2
 RUN_NAME="CounterChans_RandomSpeed_10000"
 RUN_NAME="CounterChans_RandomSpeed_2500_" #might have corrupted shrunken 720p between 2500 and 5000 vids...
 RUN_NAME="CounterChans_RandomSpeed_WithDropout_2500_" #might have corrupted shrunken 720p between 2500 and 5000 vids...
+RUN_NAME="CounterChans_BetterAug_WithDropout_50kSamp_T2V_" #
 
 # Single GPU uncompiled training
 ACCELERATE_CONFIG_FILE="accelerate_configs/uncompiled_2.yaml"
