@@ -66,8 +66,10 @@ ACCELERATE_CONFIG_FILE="accelerate_configs/uncompiled_2.yaml"
 # training dataset parameters
 DATA_ROOT="/"
 # MODEL_PATH="./ckpts/CogVideoX-5b-I2V"
-MODEL_PATH="./diffusion_shader_model"
-MODEL_PATH="./diffusion_shader_model_3666Start"
+# MODEL_PATH="./diffusion_shader_model"
+# MODEL_PATH="./diffusion_shader_model_3666Start"
+
+
 OUTPUT_PATH="./ckpts/your_ckpt_path"
 CAPTION_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/prompt.txt"
 VIDEO_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/videos.txt"
@@ -81,6 +83,11 @@ COUNTER_TRACKING_MAP_PATH="$HOME/CleanCode/Github/DiffusionAsShader/source/datas
 COUNTER_VIDEO_MAP_PATH="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/firstLastInterp_Jack2000.mp4"
 VALIDATION_PROMPT="A soccer player from Hertha BSC is in the field with the ball while an opposing player is running towards him."
 VALIDATION_IMAGES="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/video_firstFrame.png"
+
+#VARIANTS TREE
+  #DOING IT FROM SCRATCH
+  MODEL_PATH="./ckpts/CogVideoX-5b"
+  RUN_NAME="CounterChans_BetterAug_WithDropout_50kSamp_T2V_from_scratch_" #
 
 # Launch experiments with different hyperparameters
 for learning_rate in "${LEARNING_RATES[@]}"; do
