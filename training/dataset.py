@@ -12,10 +12,13 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from torchvision.transforms.functional import resize
 
-from source.video_augmentor import augment_videos
-
+import sys
 from icecream import ic
 import rp
+
+sys.path.append(rp.get_parent_folder(__file__,levels=2))
+from source.video_augmentor import augment_videos
+
 
 # Must import after torch because this can sometimes lead to a nasty segmentation fault, or stack smashing error
 # Very few bug reports but it happens. Look in decord Github issues for more relevant information.
@@ -349,7 +352,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             tracking_frames_resized = torch.stack([resize(tracking_frame, nearest_res) for tracking_frame in tracking_frames], dim=0)
             tracking_frames = torch.stack([self.video_transforms(tracking_frame) for tracking_frame in tracking_frames_resized], dim=0)
 
-            counter_tracking_reader = decord.VideoReader(uri=counter_tracking_path.as_posix())
+            counter_tracking_reader = decord.VideoReader(uri=counter_tracking_path.as_posix()) 
             counter_tracking_frames = counter_tracking_reader.get_batch(frame_indices)
             counter_tracking_frames = counter_tracking_frames[:nearest_frame_bucket].float()
             counter_tracking_frames = counter_tracking_frames.permute(0, 3, 1, 2).contiguous()
@@ -363,8 +366,8 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             counter_video_frames_resized = torch.stack([resize(counter_video_frame, nearest_res) for counter_video_frame in counter_video_frames], dim=0)
             counter_video_frames = torch.stack([self.video_transforms(counter_video_frame) for counter_video_frame in counter_video_frames_resized], dim=0)
 
-            import random
-            random.seed(rp.millis())
+            #Only 3 variants for each video please! Easier to cache!
+            rp.seed_all(rp.millis()%3 + rp.get_sha256_hash(str(path).encode(),format='int')%10000)
 
             #VIDEO SPEED AUGMENTATION. IT'S CRUDE RIGHT NOW. BUT I NEED TO PROVE IT UNDERSTANDS FIRST/LAST FRAME IS NOT ALL THERE IS...
             #NOTE: WE have a finite number of speeds to best benefit from our cache!
@@ -391,6 +394,11 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             if rp.random_chance():
                 VIDEO_SPEED, COUNTER_SPEED = [VIDEO_SPEED, COUNTER_SPEED][::-1]
 
+            if rp.random_chance(.2):
+                #20% of the time let's make them the same video for perfect correspondences
+                counter_video_frames    = frames
+                counter_tracking_frames = tracking_frames
+
             rp.fansi_print(f'dataset.py: VIDEO_SPEED={VIDEO_SPEED.__name__}      COUNTER_SPEED={COUNTER_SPEED.__name__}','white blue on black gray italic')
             #
             frames = VIDEO_SPEED(frames)
@@ -400,22 +408,22 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             counter_tracking_frames = VIDEO_SPEED(counter_tracking_frames)
 
             #Random Reversals
-            if rp.random_chance():
+            if rp.random_chance(.2):
                 rp.fansi_print(f"dataset.py: REVERSING GROUND TRUTH", "white blue on black gray italic")
-                frames          = frames         [::-1]
-                tracking_frames = tracking_frames[::-1]
-            if rp.random_chance():
+                frames          = frames         .flip(0)
+                tracking_frames = tracking_frames.flip(0)
+            if rp.random_chance(.3):
                 rp.fansi_print(f"dataset.py: REVERSING COUNTERFACTUALS", "white blue on black gray italic")
-                counter_video_frames    = counter_video_frames   [::-1]
-                counter_tracking_frames = counter_tracking_frames[::-1]
+                counter_video_frames    = counter_video_frames   .flip(0)
+                counter_tracking_frames = counter_tracking_frames.flip(0)
 
             #Random Sliding Crops
-            if rp.random_chance(.2):
+            if rp.random_chance(.1):
                 rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
-                frames, tracking_frames = augment_videos(frames, tracking_frames)
-            if rp.random_chance(.2):
+                frames, tracking_frames = augment_videos([frames, tracking_frames])
+            if rp.random_chance(.1):
                 rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
-                counter_video_frames, counter_tracking_frames = augment_videos(counter_video_frames, counter_tracking_frames)
+                counter_video_frames, counter_tracking_frames = augment_videos([counter_video_frames, counter_tracking_frames])
 
             if rp.random_chance(1/200):
                 try:
