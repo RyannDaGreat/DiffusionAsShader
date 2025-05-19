@@ -86,8 +86,8 @@ VALIDATION_IMAGES="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/yout
 
 #VARIANTS TREE
   #DOING IT FROM SCRATCH
-  MODEL_PATH="./ckpts/CogVideoX-5b"
-  RUN_NAME="CounterChans_BetterAug_WithDropout_50kSamp_T2V_from_scratch_" #
+  MODEL_PATH="/home/jupyter/CleanCode/Huggingface/CogVideoX-5b"
+  RUN_NAME="CounterChans_BetterAug_WithDropout_50kSamp_T2V_from_scratch_"
 
 # Launch experiments with different hyperparameters
 for learning_rate in "${LEARNING_RATES[@]}"; do

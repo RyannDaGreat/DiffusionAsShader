@@ -46,14 +46,14 @@ rp.load_files(
 
 root = rp.get_path_parent(__file__)
 
-prompt            = [x.prompt.replace('\n',' ')          for x in samples]
+prompt            = [str(x.prompt).replace('\n',' ')          for x in samples]
 videos            = [x.video_480p49_path                 for x in samples]
 trackings         = [x.video_dasTrackvid_path            for x in samples]
 counter_trackings = [x.cogxCounterVideo_dasTrackvid_path for x in samples]
 counter_videos    = [x.cogxCounterVideo_path             for x in samples]
 
 #Add null-prompts to training - 50% chance
-prompt += [''] * len(prompt)
+prompt += ['.'] * len(prompt) #Can't make them empty or else dataset forgets it for some reason
 videos            *= 2
 trackings         *= 2
 counter_trackings *= 2
@@ -65,9 +65,10 @@ trackings_path         = rp.save_file_lines(trackings        , rp.path_join(root
 counter_trackings_path = rp.save_file_lines(counter_trackings, rp.path_join(root, "counter_trackings.txt"))
 counter_videos_path    = rp.save_file_lines(counter_videos   , rp.path_join(root, "counter_videos.txt"   ))
 
+
+
 print(rp.fansi_highlight_path(rp.get_absolute_path(prompt_path           )))
 print(rp.fansi_highlight_path(rp.get_absolute_path(videos_path           )))
 print(rp.fansi_highlight_path(rp.get_absolute_path(trackings_path        )))
 print(rp.fansi_highlight_path(rp.get_absolute_path(counter_trackings_path)))
 print(rp.fansi_highlight_path(rp.get_absolute_path(counter_videos_path   )))
-
