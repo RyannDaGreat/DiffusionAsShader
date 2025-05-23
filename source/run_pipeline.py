@@ -119,14 +119,14 @@ def run_pipe(
         "num_frames"          : 49,
         "use_dynamic_cfg"     : True,
         "guidance_scale"      : 3,
-        "num_inference_steps" : 30,
+        "num_inference_steps" : 50,
     }
 
     pipeline_args |= dict(          
         use_image_conditioning=True,
         # latent_conditioning_dropout=[0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-        # latent_conditioning_dropout=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], #Weird, not as good actually...
-        latent_conditioning_dropout=[1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1], #Sparse...25%
+        latent_conditioning_dropout=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], #Weird, not as good actually...
+        # latent_conditioning_dropout=[1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1], #Sparse...25%
 
         # use_image_conditioning=False,
         # latent_conditioning_dropout=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], #Weird, not as good actually...
@@ -199,10 +199,6 @@ def run_test(index):
         return new_video_path
     video_path = make_480p49(video_path)
 
-    if 1:
-        #Use real one as input...
-        counter_tracking_map_path, tracking_map_path = tracking_map_path, counter_tracking_map_path
-        video_path, counter_video_map_path = counter_video_map_path, video_path
 
     if 1:
 
@@ -213,7 +209,7 @@ def run_test(index):
                 #return halfspeed_video_path
             video=rp.load_video(video_path)
             video=rp.resize_list(video,len(video)*2)[:len(video)]
-            print('make_halfspeed: NEW VIDEO SHAPE:',video.shape)
+            rp.fansi_print(f'{rp.get_current_function_name()}','purple')
             rp.save_video_mp4(video,halfspeed_video_path,video_bitrate='max')
             return halfspeed_video_path
 
@@ -222,25 +218,60 @@ def run_test(index):
             halfspeed_video_path = video_path+'_reversed.mp4'
             video=rp.load_video(video_path)
             video=video[::-1]
-            print('make_reversed: NEW VIDEO SHAPE:',video.shape)
+            rp.fansi_print(f'{rp.get_current_function_name()}','purple')
             rp.save_video_mp4(video,halfspeed_video_path,video_bitrate='max')
             return halfspeed_video_path
-        
-        
-        video_path=make_halfspeed(video_path)
-        tracking_map_path=make_halfspeed(tracking_map_path)
-        output_video_path+='_halfspeed.mp4'
-        output_preview_path+='_halfspeed.mp4'
 
-        # counter_video_map_path = make_reversed(video_path)
-        # counter_tracking_map_path = make_reversed(tracking_map_path)
-        # output_video_path+='_reverseOrig.mp4'
-        # output_preview_path+='_reverseOrig.mp4'
+        #Try to reverse it, for testing...
+        def make_zoomed(video_path,factor=2):
+            new_video_path = video_path+'_zoomed.mp4'
+            video=rp.load_video(video_path)
+            video=rp.crop_images(rp.resize_images(video,size=factor),height=rp.get_video_height(video),width=rp.get_video_width(video),origin='center')
+            rp.fansi_print(f'{rp.get_current_function_name()}','purple')
+            rp.save_video_mp4(video,new_video_path,video_bitrate='max')
+            return new_video_path
+
+        #Try boomeranging, for testing...
+        def make_boomerang(video_path,factor=2):
+            new_video_path = video_path+'_boomerang.mp4'
+            video=rp.load_video(video_path)
+            video=rp.resize_list(rp.boomerang_video(video),len(video))
+            rp.fansi_print(f'{rp.get_current_function_name()}','purple')
+            rp.save_video_mp4(video,new_video_path,video_bitrate='max')
+            return new_video_path
+
+        #Try copying, for testing...
+        def make_copy(video_path,factor=2):
+            new_video_path = video_path+'_copy.mp4'
+            video=rp.load_video(video_path)
+            rp.fansi_print(f'{rp.get_current_function_name()}','purple')
+            rp.save_video_mp4(video,new_video_path,video_bitrate='max')
+            return new_video_path
+        
+        counter_video_map_path = make_copy(video_path)
+        counter_tracking_map_path = make_copy(tracking_map_path)
+        output_video_path+='_copy.mp4'
+        output_preview_path+='_copy.mp4'
+
+        # video_path=make_halfspeed(video_path)
+        # tracking_map_path=make_halfspeed(tracking_map_path)
+        # output_video_path+='_halfspeed.mp4'
+        # output_preview_path+='_halfspeed.mp4'
+
+        # counter_video_map_path = make_reversed(counter_video_map_path)
+        # counter_tracking_map_path = make_reversed(counter_tracking_map_path)
+        # output_video_path+='_reverseCounter.mp4'
+        # output_preview_path+='_reverseCounter.mp4'
 
         # counter_video_map_path = make_reversed(counter_video_map_path)
         # counter_tracking_map_path = make_reversed(counter_tracking_map_path)
         # output_video_path+='_reverse.mp4'
         # output_preview_path+='_reverse.mp4'
+
+        counter_video_map_path = make_boomerang(counter_video_map_path)
+        counter_tracking_map_path = make_boomerang(counter_tracking_map_path)
+        output_video_path+='_boomerang.mp4'
+        output_preview_path+='_boomerang.mp4'
 
 
     video = run_pipe(**rp.gather_vars('prompt video_path tracking_map_path counter_tracking_map_path counter_video_map_path'))
@@ -287,6 +318,8 @@ checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_c
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-14700'
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-29000'
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-29000'
+checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-29000'
+checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_BetterAug_WithDropout_50kSamp_T2V_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-9000'
 
 checkpoint_title = rp.get_folder_name(checkpoint_root)
 
