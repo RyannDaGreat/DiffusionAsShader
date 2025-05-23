@@ -771,10 +771,28 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                 
                 rp.fansi_print(f'i2v_to_t2v: {status}','yellow')
 
-            def maybe_zero(param):
-                if os.environ.get('DISABLE_CONTROLNET'):
-                    param.zero_()
-                    rp.fansi_print(f"DISABLE_CONTROLNET: Zeroing - {(param**2).sum()}", "red red bold on yellow yellow")
+
+# TODO: Something like this if we want to be able to initialize from original T2V model
+#           def revert_state_dict():
+#                 for key in state:
+#                     if '_copy' in key:
+#                         #EXAMPLE: transformer_blocks_copy.17.norm1.norm.weight
+#                         state[key]=state[key.replace('_copy','')]
+#                         print(f'Replacing {key}')
+#                     if 'combine' in key:
+#                         state[key].zero_()
+#                         print(f'Zeroing {key}')
+#
+#             state=load_safetensors('*.safetensors',keys_only=False)
+#             revert_state_dict(state)"""
+#
+#             def maybe_zero(param):
+#                 if os.environ.get('DISABLE_CONTROLNET'):
+#                     param.zero_()
+#                     rp.fansi_print(
+#                         f"DISABLE_CONTROLNET: Zeroing - {(param**2).sum()}",
+#                         "red red bold on yellow yellow",
+#                     )
 
             # Freeze all parameters
             for param in model.parameters():
