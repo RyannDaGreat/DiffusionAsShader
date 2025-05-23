@@ -327,6 +327,9 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         if self.load_tensors:
             return self._load_preprocessed_latents_and_embeds(path, tracking_path)
         else:
+
+            audit_metadata = []
+
             video_reader = decord.VideoReader(uri=path.as_posix())
             video_num_frames = len(video_reader)
             nearest_frame_bucket = min(
@@ -393,11 +396,13 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             VIDEO_SPEED, COUNTER_SPEED = regular_speed, RANDOM_SPEED
             if rp.random_chance():
                 VIDEO_SPEED, COUNTER_SPEED = [VIDEO_SPEED, COUNTER_SPEED][::-1]
+                audit_metadata+=[f'GT_SPEED={VIDEO_SPEED}',f'CTR_SPEED={COUNTER_SPEED}']
 
             if rp.random_chance(.2):
                 #20% of the time let's make them the same video for perfect correspondences
                 counter_video_frames    = frames
                 counter_tracking_frames = tracking_frames
+                audit_metadata+=['Swap']
 
             rp.fansi_print(f'dataset.py: VIDEO_SPEED={VIDEO_SPEED.__name__}      COUNTER_SPEED={COUNTER_SPEED.__name__}','white blue on black gray italic')
             #
@@ -412,18 +417,22 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                 rp.fansi_print(f"dataset.py: REVERSING GROUND TRUTH", "white blue on black gray italic")
                 frames          = frames         .flip(0)
                 tracking_frames = tracking_frames.flip(0)
+                audit_metadata+=['REV-GT']
             if rp.random_chance(.3):
                 rp.fansi_print(f"dataset.py: REVERSING COUNTERFACTUALS", "white blue on black gray italic")
                 counter_video_frames    = counter_video_frames   .flip(0)
                 counter_tracking_frames = counter_tracking_frames.flip(0)
+                audit_metadata+=['REV-CTR']
 
             #Random Sliding Crops
             if rp.random_chance(.1):
                 rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
                 frames, tracking_frames = augment_videos([frames, tracking_frames])
+                audit_metadata+=['AUG-GT']
             if rp.random_chance(.1):
                 rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
                 counter_video_frames, counter_tracking_frames = augment_videos([counter_video_frames, counter_tracking_frames])
+                audit_metadata+=['AUG-CTR']
 
             if rp.random_chance(1/200):
                 try:
@@ -433,6 +442,13 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                     rp.fansi_print(f"SAVING RANDOM DATASET SAMPLE TO {dataset_audit_path}", "green red white bold underdouble")
                     sample = image, frames, tracking_frames, counter_tracking_frames, counter_video_frames
                     rp.object_to_file(sample, dataset_audit_path)
+
+                    audit_videos=[rp.as_numpy_video(x/2+.5) for x in sample]
+                    audit_videos=rp.labeled_videos(audit_videos,'Image Frames Tracks CounterTracks CounterFrames'.split())
+                    audit_videos=rp.horizontally_concatenated_videos(audit_videos)
+                    audit_videos=rp.labeled_images(audit_videos,"  :  ".join(audit_metadata))
+                    print(rp.save_video_mp4(audit_videos,dataset_audit_path+'.mp4',framerate=20))
+
                 except Exception:
                     rp.print_stack_trace()
             
@@ -475,6 +491,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
 
         with open(prompt_path, "r", encoding="utf-8") as file:
             prompts = [line.strip() for line in file.readlines() if len(line.strip()) > 0]
+            
         with open(video_path, "r", encoding="utf-8") as file:
             video_paths = [self.data_root.joinpath(line.strip()) for line in file.readlines() if len(line.strip()) > 0]
         with open(tracking_path, "r", encoding="utf-8") as file:

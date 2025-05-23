@@ -215,7 +215,12 @@ def augment_video(video, quads=None):
 def augment_videos(videos, quads=None):
     assert len(set(video.shape for video in videos))==1
 
-    T, VH, VW, C = videos[0].shape
+    if rp.is_torch_tensor(videos[0]):
+        T, C, VH, VW = videos[0].shape
+    elif rp.is_numpy_array(videos[0]):
+        T, VH, VW, C = videos[0].shape
+    else:
+        assert False,type(videos[0])
 
     if quads is None:
         quads = get_random_quads(T, VH, VW)
