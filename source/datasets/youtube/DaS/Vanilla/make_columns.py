@@ -18,6 +18,7 @@ dataset = ProcessedYoutubeDataset()
 # Right now just using 1000 samples so I can test the code and make sure it runs
 # samples = rp.gather(dataset, range(25000))
 samples = rp.gather(dataset, range(10000))
+samples = rp.gather(dataset, range(300000)[-1000:])
 # samples = rp.gather(dataset, range(2500))
 # samples = rp.gather(dataset, range(10))
 
@@ -47,13 +48,13 @@ rp.load_files(
 root = rp.get_path_parent(__file__)
 
 prompt            = [str(x.prompt).replace('\n',' ')          for x in samples]
-videos            = [x.video_480p49_path                 for x in samples]
-trackings         = [x.video_dasTrackvid_path            for x in samples]
-counter_trackings = [x.cogxCounterVideo_dasTrackvid_path for x in samples]
-counter_videos    = [x.cogxCounterVideo_path             for x in samples]
+videos            = [str(x.video_480p49_path)                 for x in samples]
+trackings         = [str(x.video_dasTrackvid_path)            for x in samples]
+counter_trackings = [str(x.cogxCounterVideo_dasTrackvid_path) for x in samples]
+counter_videos    = [str(x.cogxCounterVideo_path)             for x in samples]
 
 #Add null-prompts to training - 50% chance
-prompt += ['.'] * len(prompt) #Can't make them empty or else dataset forgets it for some reason
+prompt += ['.'] * len(prompt)
 videos            *= 2
 trackings         *= 2
 counter_trackings *= 2
@@ -65,10 +66,9 @@ trackings_path         = rp.save_file_lines(trackings        , rp.path_join(root
 counter_trackings_path = rp.save_file_lines(counter_trackings, rp.path_join(root, "counter_trackings.txt"))
 counter_videos_path    = rp.save_file_lines(counter_videos   , rp.path_join(root, "counter_videos.txt"   ))
 
-
-
 print(rp.fansi_highlight_path(rp.get_absolute_path(prompt_path           )))
 print(rp.fansi_highlight_path(rp.get_absolute_path(videos_path           )))
 print(rp.fansi_highlight_path(rp.get_absolute_path(trackings_path        )))
 print(rp.fansi_highlight_path(rp.get_absolute_path(counter_trackings_path)))
 print(rp.fansi_highlight_path(rp.get_absolute_path(counter_videos_path   )))
+
