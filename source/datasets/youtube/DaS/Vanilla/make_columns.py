@@ -23,8 +23,8 @@ samples = rp.gather(dataset, range(10000))
 # samples = rp.gather(dataset, range(10))
 
 def prepare_sample(sample):
-    if not rp.path_exists(sample.video_480p49_path):
-        sample.video_480p49
+    if not rp.path_exists(sample.video_480p49Stretch_path):
+        sample.video_480p49Stretch
         sample.upload()
 
 rp.load_files(
@@ -48,7 +48,7 @@ rp.load_files(
 root = rp.get_path_parent(__file__)
 
 prompt            = [str(x.prompt).replace('\n',' ')          for x in samples]
-videos            = [str(x.video_480p49_path)                 for x in samples]
+videos            = [str(x.video_480p49Stretch_path)                 for x in samples]
 trackings         = [str(x.video_dasTrackvid_path)            for x in samples]
 counter_trackings = [str(x.cogxCounterVideo_dasTrackvid_path) for x in samples]
 counter_videos    = [str(x.cogxCounterVideo_path)             for x in samples]
