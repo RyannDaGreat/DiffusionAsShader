@@ -85,9 +85,21 @@ VALIDATION_PROMPT="A soccer player from Hertha BSC is in the field with the ball
 VALIDATION_IMAGES="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/video_firstFrame.png"
 
 #VARIANTS TREE
-  #DOING IT FROM SCRATCH
+  #DOING IT FROM SCRATCH 
   MODEL_PATH="/home/jupyter/CleanCode/Huggingface/CogVideoX-5b"
   RUN_NAME="CounterChans_BetterAug_WithDropout_50kSamp_T2V_from_scratch_"
+    
+    #CONTINUING AFTER DATASET FIX AUGMENTATIONS (only for computer 3666 unless you sync checkpoints )
+    #WAS CREATED VIA:
+    #    make_hardlink(
+    #        "/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_BetterAug_WithDropout_50kSamp_T2V_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-9500/transformer",
+    #        "/home/jupyter/CleanCode/Github/DiffusionAsShader/diffusion_shader_model_3666Start/transformer",
+    #        recursive=True,
+    #    )
+    MODEL_PATH="./diffusion_shader_model_3666Start"
+
+
+
 
 # Launch experiments with different hyperparameters
 for learning_rate in "${LEARNING_RATES[@]}"; do
