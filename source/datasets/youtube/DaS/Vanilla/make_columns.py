@@ -18,7 +18,7 @@ dataset = ProcessedYoutubeDataset()
 # Right now just using 1000 samples so I can test the code and make sure it runs
 # samples = rp.gather(dataset, range(25000))
 samples = rp.gather(dataset, range(10000))
-samples = rp.gather(dataset, range(300000)[-1000:])
+# samples = rp.gather(dataset, range(300000)[-1000:])
 # samples = rp.gather(dataset, range(2500))
 # samples = rp.gather(dataset, range(10))
 
@@ -59,6 +59,8 @@ videos            *= 2
 trackings         *= 2
 counter_trackings *= 2
 counter_videos    *= 2
+
+prompt, videos, trackings, counter_trackings, counter_videos = rp.sync_shuffled(prompt, videos, trackings, counter_trackings, counter_videos)
 
 prompt_path            = rp.save_file_lines(prompt           , rp.path_join(root, "prompt.txt"           ))
 videos_path            = rp.save_file_lines(videos           , rp.path_join(root, "videos.txt"           ))
