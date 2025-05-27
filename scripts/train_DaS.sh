@@ -45,7 +45,7 @@ OPTIMIZERS=("adamw")
 MAX_TRAIN_STEPS=("10000000")
 WARMUP_STEPS=100
 CHECKPOINT_STEPS=500
-CHECKPOINT_STEPS=100 #TINY MODE FOR TESTING: Use with source/checkpoint_pruner.py so you don't run out of harddrive space.
+# CHECKPOINT_STEPS=100 #TINY MODE FOR TESTING: Use with source/checkpoint_pruner.py so you don't run out of harddrive space.
 TRAIN_BATCH_SIZE=2 
 
 #Realized mistake - all last frames of counter and actual were same. We will train next from this.
@@ -87,7 +87,7 @@ VALIDATION_IMAGES="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/yout
 #VARIANTS TREE
   #DOING IT FROM SCRATCH 
   MODEL_PATH="/home/jupyter/CleanCode/Huggingface/CogVideoX-5b"
-  RUN_NAME="CounterChans_BetterAug_WithDropout_50kSamp_T2V_from_scratch_"
+  RUN_NAME="CounterChans_FIXED_DATASET_BetterAug_WithDropout_50kSamp_T2V_from_scratch_"
     
     #CONTINUING AFTER DATASET FIX AUGMENTATIONS (only for computer 3666 unless you sync checkpoints )
     #WAS CREATED VIA:
