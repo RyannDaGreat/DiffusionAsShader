@@ -24,10 +24,10 @@ samples = rp.gather(dataset, range(30000))
 
 def prepare_sample(sample):
     if not rp.path_exists(sample.video_480p49Stretch_path): 
-        #sample.video #THIS IS FAST. THEREFORE SAVE_VIDEO IS THE CULPRIT...
+        #sample.video #THIS IS FAST. THEREFORE SAVE_VIDEO IS THE CULPRIT...RIGHT?
+        #sample.video_480p49Stretch #THIS SOMEHOW BLOCKS ALL BUT 1 THREAD... 
         video_480p49Stretch = rp.resize_images(rp.resize_list(sample.video,49), size=(480, 720))
         rp.save_video_mp4(video_480p49Stretch,sample.video_480p49Stretch_path,show_progress=False)
-        #sample.video_480p49Stretch
         sample.upload()
 
 rp.load_files(
