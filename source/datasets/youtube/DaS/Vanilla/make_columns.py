@@ -17,14 +17,17 @@ dataset = ProcessedYoutubeDataset()
 
 # Right now just using 1000 samples so I can test the code and make sure it runs
 # samples = rp.gather(dataset, range(25000))
-samples = rp.gather(dataset, range(10000))
+samples = rp.gather(dataset, range(30000))
 # samples = rp.gather(dataset, range(300000)[-1000:])
 # samples = rp.gather(dataset, range(2500))
 # samples = rp.gather(dataset, range(10))
 
 def prepare_sample(sample):
-    if not rp.path_exists(sample.video_480p49Stretch_path):
-        sample.video_480p49Stretch
+    if not rp.path_exists(sample.video_480p49Stretch_path): 
+        #sample.video #THIS IS FAST. THEREFORE SAVE_VIDEO IS THE CULPRIT...
+        video_480p49Stretch = rp.resize_images(rp.resize_list(sample.video,49), size=(480, 720))
+        rp.save_video_mp4(video_480p49Stretch,sample.video_480p49Stretch_path,show_progress=False)
+        #sample.video_480p49Stretch
         sample.upload()
 
 rp.load_files(
