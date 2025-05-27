@@ -829,7 +829,7 @@ def main(args):
                     truly_random_seed()
 
                     #Get the latent frames we'll be discarding...
-                    temporal_dropout = temporal_dropout_boolean_list(LT, .25)
+                    temporal_dropout = temporal_dropout_boolean_list(LT, .5)
 
                     rp.fansi_print(f"DO_TEMPORAL_DROPOUT: temporal_dropout = {''.join(map(str,map(int,temporal_dropout)))}", 'orange italic on dark dark blue')
 
