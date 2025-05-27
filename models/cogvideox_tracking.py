@@ -746,7 +746,7 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                 
                 merged_safetensors= rp.merged_dicts(
                     [rp.load_safetensors(x) for x in rp.eta(safetensor_paths, "Loading Safetensors")]
-                )
+            )
                 
                 #Correct the number of channels in the T2V model if needed; by padding zeros - effecively turning it into a T2V model
                 assert 'patch_embed.proj.weight' in merged_safetensors
@@ -805,11 +805,11 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                 
             for linear in model.combine_linears:
                 for param in linear.parameters():
-                    maybe_zero(param)
+                    # maybe_zero(param)
                     param.requires_grad = True
                 
             for param in model.initial_combine_linear.parameters():
-                maybe_zero(param)
+                # maybe_zero(param)
                 param.requires_grad = True
         
             for param in model.second_patch_embed.proj.parameters():
