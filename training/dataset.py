@@ -51,6 +51,11 @@ class VideoDataset(Dataset):
     ) -> None:
         super().__init__()
 
+        if random_flip:
+            print("CHEESE NOOO NON ON ONONONON ONONAOI SDOPIUAHSD AUSHD OIUASDHUOIAISDOIHUASDIOAHIOUS DHIOUAAAAAAAAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHH\n"*1000)
+        else:
+            print("nah fam we good")
+
         self.data_root = Path(data_root)
         self.dataset_file = dataset_file
         self.caption_column = caption_column
@@ -92,9 +97,9 @@ class VideoDataset(Dataset):
 
         self.video_transforms = transforms.Compose(
             [
-                transforms.RandomHorizontalFlip(random_flip)
-                if random_flip
-                else transforms.Lambda(self.identity_transform),
+                # transforms.RandomHorizontalFlip(random_flip)
+                # if random_flip
+                # else transforms.Lambda(self.identity_transform),
                 transforms.Lambda(self.scale_transform),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True),
             ]
@@ -372,6 +377,9 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             #Only 3 variants for each video please! Easier to cache!
             rp.seed_all(rp.millis()%3 + rp.get_sha256_hash(str(path).encode(),format='int')%10000)
 
+            assert len(frames)==len(tracking_frames)==len(counter_video_frames)==len(counter_tracking_frames),f'NOT ALL LENGTHS ARE EQUAL: len(frames)={len(frames)} AND len(tracking_frames)={len(tracking_frames)} AND len(counter_video_frames)={len(counter_video_frames)} AND len(counter_tracking_frames)={len(counter_tracking_frames)}'
+
+
             #VIDEO SPEED AUGMENTATION. IT'S CRUDE RIGHT NOW. BUT I NEED TO PROVE IT UNDERSTANDS FIRST/LAST FRAME IS NOT ALL THERE IS...
             #NOTE: WE have a finite number of speeds to best benefit from our cache!
             def regular_speed(video):
@@ -386,31 +394,61 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             def half_speed_second_half(video):
                 return rp.resize_list(video, len(video)*2)[len(video):]
             #
+            def half_speed_middle(video):
+                return rp.resize_list(video, len(video)*2)[len(video)//2:len(video)//2+len(video)]
+            #
             def two_thirds_speed_later_half(video):
                 return rp.resize_list(video, int(len(video)*1.5))[len(video):]
             #
-            RANDOM_SPEED = [regular_speed,half_speed,two_thirds_speed, half_speed_second_half, two_thirds_speed_later_half]
+            def two_thirds_speed_middle(video):
+                extended = rp.resize_list(video, int(len(video)*1.5))
+                start = int(len(extended)*1/6)
+                return extended[start:start+len(video)]            
+            #
+            RANDOM_SPEED = [
+                regular_speed,
+                half_speed,
+                two_thirds_speed,
+                half_speed_second_half,
+                half_speed_middle,
+                two_thirds_speed_later_half,
+                two_thirds_speed_middle,
+            ]
             RANDOM_SPEED = rp.random_element(RANDOM_SPEED)
+            if rp.random_chance(.5):
+                #Sometimes I want even less overlap...
+                VIDEO_SPEED = rp.random_element(RANDOM_SPEED)
 
             #At least one will be full speed
             VIDEO_SPEED, COUNTER_SPEED = regular_speed, RANDOM_SPEED
             if rp.random_chance():
                 VIDEO_SPEED, COUNTER_SPEED = [VIDEO_SPEED, COUNTER_SPEED][::-1]
-                audit_metadata+=[f'GT_SPEED={VIDEO_SPEED}',f'CTR_SPEED={COUNTER_SPEED}']
 
             if rp.random_chance(.2):
                 #20% of the time let's make them the same video for perfect correspondences
-                counter_video_frames    = frames
-                counter_tracking_frames = tracking_frames
+                counter_video_frames    = 0 + frames
+                counter_tracking_frames = 0 + tracking_frames
                 audit_metadata+=['Swap']
 
             rp.fansi_print(f'dataset.py: VIDEO_SPEED={VIDEO_SPEED.__name__}      COUNTER_SPEED={COUNTER_SPEED.__name__}','white blue on black gray italic')
+            audit_metadata+=[f'GT_SPEED={VIDEO_SPEED.__name__}',f'CTR_SPEED={COUNTER_SPEED.__name__}']
             #
-            frames = VIDEO_SPEED(frames)
+            assert len(frames)==len(tracking_frames)==len(counter_video_frames)==len(counter_tracking_frames),f'NOT ALL LENGTHS ARE EQUAL: len(frames)={len(frames)} AND len(tracking_frames)={len(tracking_frames)} AND len(counter_video_frames)={len(counter_video_frames)} AND len(counter_tracking_frames)={len(counter_tracking_frames)}'
+
+            original_frames                  = frames
+            original_tracking_frames         = tracking_frames
+            original_counter_video_frames    = counter_video_frames
+            original_counter_tracking_frames = counter_tracking_frames
+
+
+            frames          = VIDEO_SPEED(frames)
             tracking_frames = VIDEO_SPEED(tracking_frames)
             #
-            counter_video_frames = VIDEO_SPEED(counter_video_frames)
-            counter_tracking_frames = VIDEO_SPEED(counter_tracking_frames)
+            counter_video_frames    = COUNTER_SPEED(counter_video_frames)
+            counter_tracking_frames = COUNTER_SPEED(counter_tracking_frames)
+
+            assert len(frames)==len(tracking_frames)==len(counter_video_frames)==len(counter_tracking_frames),f'NOT ALL LENGTHS ARE EQUAL: len(frames)={len(frames)} AND len(tracking_frames)={len(tracking_frames)} AND len(counter_video_frames)={len(counter_video_frames)} AND len(counter_tracking_frames)={len(counter_tracking_frames)}'
+
 
             #Random Reversals
             if rp.random_chance(.2):
@@ -425,18 +463,18 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                 audit_metadata+=['REV-CTR']
 
             #Random Sliding Crops
-            if rp.random_chance(.1):
+            if rp.random_chance(.2):
                 rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
                 frames, tracking_frames = augment_videos([frames, tracking_frames])
                 audit_metadata+=['AUG-GT']
-            if rp.random_chance(.1):
+            if rp.random_chance(.2):
                 rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
                 counter_video_frames, counter_tracking_frames = augment_videos([counter_video_frames, counter_tracking_frames])
                 audit_metadata+=['AUG-CTR']
 
+            # if rp.random_chance(1/200):
             if rp.random_chance(1/200):
                 try:
-                    rp.make_directory(".random_dataset_samples")
                     dataset_audit_path = f".random_dataset_samples/sample_{rp.random_int(100)}.pkl" #Don't save a total of more than 100 samples so we have no disk leaks
                     dataset_audit_path = rp.get_absolute_path(dataset_audit_path)
                     rp.fansi_print(f"SAVING RANDOM DATASET SAMPLE TO {dataset_audit_path}", "green red white bold underdouble")
@@ -446,8 +484,12 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                     audit_videos=[rp.as_numpy_video(x/2+.5) for x in sample]
                     audit_videos=rp.labeled_videos(audit_videos,'Image Frames Tracks CounterTracks CounterFrames'.split())
                     audit_videos=rp.horizontally_concatenated_videos(audit_videos)
+                    orig_videos = rp.horizontally_concatenated_videos(
+                        [rp.as_numpy_video(x/2+.5) for x in [original_frames*0, original_frames, original_tracking_frames, original_counter_tracking_frames, original_counter_video_frames]]
+                    )
                     audit_videos=rp.labeled_images(audit_videos,"  :  ".join(audit_metadata))
-                    print(rp.save_video_mp4(audit_videos,dataset_audit_path+'.mp4',framerate=20))
+                    
+                    print(rp.save_video_mp4(rp.vertically_concatenated_videos(audit_videos,orig_videos),dataset_audit_path+'.mp4',framerate=20))
 
                 except Exception:
                     rp.print_stack_trace()
