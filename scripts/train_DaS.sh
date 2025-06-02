@@ -4,8 +4,19 @@
 Ryan: Please run this from the PARENT of the scripts directory!
 !
 cd ~/CleanCode/Github/DiffusionAsShader
+
 bash ~/CleanCode/Management/sync_projects.bash
-bash ./scripts/train_DaS.sh
+
+INIT_CHECKPOINT_PATH="$HOME/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-44200"
+python ~/CleanCode/Management/syncutil.py sync_checkpoint_folder $INIT_CHECKPOINT_PATH
+
+TRAIN_FROM_DIR=diffusion_shader_model_3666Start
+rm -rf $TRAIN_FROM_DIR
+cp -al diffusion_shader_model $TRAIN_FROM_DIR
+rm -rf $TRAIN_FROM_DIR/transformer
+cp -al $INIT_CHECKPOINT_PATH/transformer $TRAIN_FROM_DIR/transformer
+
+bash scripts/train_DaS.sh
 '
 
 ##########################

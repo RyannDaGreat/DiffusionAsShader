@@ -51,7 +51,7 @@ rp.load_files(
 root = rp.get_path_parent(__file__)
 
 prompt            = [str(x.prompt).replace('\n',' ')          for x in samples]
-videos            = [str(x.video_480p49Stretch_path)                 for x in samples]
+videos            = [str(x.video_480p49Stretch_path)          for x in samples]
 trackings         = [str(x.video_dasTrackvid_path)            for x in samples]
 counter_trackings = [str(x.cogxCounterVideo_dasTrackvid_path) for x in samples]
 counter_videos    = [str(x.cogxCounterVideo_path)             for x in samples]
