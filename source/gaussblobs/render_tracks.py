@@ -88,10 +88,76 @@ def _draw_soaked_track_grids_numba(soaked_track_grids_np, VH, VW):
     
     return video_np
 
+@numba.njit(parallel=True)
+def _draw_soaked_track_grid_gaussians_numba(soaked_track_grids_np, VH, VW, sigma):
+    # Numba implementation for gaussian blob rendering with alpha compositing
+    T, TH, TW, XYZVRGBA = soaked_track_grids_np.shape
+    RGBA = 4
+    Xi, Yi, Zi, Vi, RGBAi = 0, 1, 2, 3, 4
+    
+    video_np = np.zeros((T, RGBA, VH, VW), dtype=np.float32)
+    
+    # Precompute gaussian radius (3 sigma cutoff for efficiency)
+    radius = int(np.ceil(3.0 * sigma))
+    
+    for t in numba.prange(T):
+        for ty in range(TH):
+            for tx in range(TW):
+                center_x = soaked_track_grids_np[t, ty, tx, Xi]
+                center_y = soaked_track_grids_np[t, ty, tx, Yi]
+                vz = soaked_track_grids_np[t, ty, tx, Zi]
+                vv = int(soaked_track_grids_np[t, ty, tx, Vi])
+                
+                if not vv:
+                    continue
+                
+                # Get the color for this gaussian
+                r = soaked_track_grids_np[t, ty, tx, RGBAi + 0]
+                g = soaked_track_grids_np[t, ty, tx, RGBAi + 1]
+                b = soaked_track_grids_np[t, ty, tx, RGBAi + 2]
+                base_alpha = soaked_track_grids_np[t, ty, tx, RGBAi + 3]
+                
+                # Draw gaussian blob
+                for dy in range(-radius, radius + 1):
+                    for dx in range(-radius, radius + 1):
+                        px = int(center_x + dx)
+                        py = int(center_y + dy)
+                        
+                        if 0 <= py < VH and 0 <= px < VW:
+                            # Calculate gaussian weight
+                            dist_sq = dx * dx + dy * dy
+                            gauss_weight = np.exp(-dist_sq / (2.0 * sigma * sigma))
+                            alpha = base_alpha * gauss_weight
+                            
+                            # Alpha compositing: new_color = old_color * (1 - alpha) + new_color * alpha
+                            one_minus_alpha = 1.0 - alpha
+                            video_np[t, 0, py, px] = video_np[t, 0, py, px] * one_minus_alpha + r * alpha
+                            video_np[t, 1, py, px] = video_np[t, 1, py, px] * one_minus_alpha + g * alpha
+                            video_np[t, 2, py, px] = video_np[t, 2, py, px] * one_minus_alpha + b * alpha
+                            video_np[t, 3, py, px] = video_np[t, 3, py, px] * one_minus_alpha + base_alpha * alpha
+    
+    return video_np
+
 def draw_soaked_track_grids(soaked_track_grids, VH:int, VW:int):
     # Convert to numpy for numba processing, then back to torch
     soaked_track_grids_np = soaked_track_grids.cpu().numpy()
     video_np = _draw_soaked_track_grids_numba(soaked_track_grids_np, VH, VW)
+    video = torch.from_numpy(video_np)
+
+    rp.validate_tensor_shapes(
+        soaked_track_grids    = "torch: T TH TW XYZVRGBA ",
+        soaked_track_grids_np = "numpy: T TH TW XYZVRGBA ",
+        video_np              = "numpy: T RGBA VH VW     ",
+        video                 = "torch: T RGBA VH VW     ",
+        RGBA=4,
+    )
+    
+    return video
+
+def draw_soaked_track_grid_gaussians(soaked_track_grids, VH:int, VW:int, sigma:float):
+    # Convert to numpy for numba processing, then back to torch
+    soaked_track_grids_np = soaked_track_grids.cpu().numpy()
+    video_np = _draw_soaked_track_grid_gaussians_numba(soaked_track_grids_np, VH, VW, sigma)
     video = torch.from_numpy(video_np)
 
     rp.validate_tensor_shapes(
@@ -192,8 +258,8 @@ T, N, VH, VW = rp.validate_tensor_shapes(
 
 
 #Upscale the tracks...
-THS = VH #1 #Tracks height subdivided
-TWS = VW #1 #Tracks width subdivided
+THS = VH//16 #1 #Tracks height subdivided
+TWS = VW//16 #1 #Tracks width subdivided
 print('cheese')
 video_track_grids   = subdivide_track_grids(video_tracks  , THS, TWS)
 print('choose')
@@ -211,7 +277,8 @@ rp.validate_tensor_shapes(
 
 
 soaked_track_grids = soak_track_grids(video_track_grids, video)
-drawn_video = draw_soaked_track_grids(soaked_track_grids, VH, VW)
+# drawn_video = draw_soaked_track_grids(soaked_track_grids, VH, VW)
+drawn_video = draw_soaked_track_grid_gaussians(soaked_track_grids, VH, VW, sigma=5)
 
 counter_soaked_track_grids = soaked_track_grids + 0 #Inherit the colors
 soaked_track_grids[:,:,:,:2]=counter_track_grids[:,:,:,:2] #Inherit the new XY
@@ -221,10 +288,12 @@ soaked_track_grids[:,:,:,3]*=counter_track_grids[:,:,:,3] #Intersection of visib
 #soaked_track_grids[:,:,:,3]=1 #No invisiblity anywhere 
 
 #Draw a video from it
-counter_drawn_video = draw_soaked_track_grids(soaked_track_grids, VH, VW)
+# counter_drawn_video = draw_soaked_track_grids(soaked_track_grids, VH, VW)
+counter_drawn_video = draw_soaked_track_grid_gaussians(soaked_track_grids, VH, VW, sigma=5)
 
 counter_drawn_video_np = rp.as_numpy_images(counter_drawn_video)
-counter_drawn_video_np =rp.with_alpha_checkerboards(counter_drawn_video_np)
+# counter_drawn_video_np =rp.with_alpha_checkerboards(counter_drawn_video_np)
+counter_drawn_video_np =rp.as_rgb_images(counter_drawn_video_np)
 
 ###
 
