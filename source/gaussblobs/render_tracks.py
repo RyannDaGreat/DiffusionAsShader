@@ -217,8 +217,6 @@ counter_soaked_track_grids = soaked_track_grids + 0 #Inherit the colors
 soaked_track_grids[:,:,:,:2]=counter_track_grids[:,:,:,:2] #Inherit the new XY
 soaked_track_grids[:,:,:,3]*=counter_track_grids[:,:,:,3] #Intersection of visibility
 
-soak_track_grids[:,:,:,]
-
 
 #soaked_track_grids[:,:,:,3]=1 #No invisiblity anywhere 
 

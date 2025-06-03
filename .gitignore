@@ -224,3 +224,4 @@ diffusion_shader_model
 node_modules
 package-lock.json
 source/demo_temporal_dropout_boolean_list.png
+source/gaussblobs/*.mp4
