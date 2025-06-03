@@ -1,10 +1,7 @@
 import rp
-import sys, os
 import torch
 import numpy as np
 from einops import rearrange
-from einops import reduce
-import itertools
 import numba
 
 def subdivide_track_grids(tracks, new_TH, new_TW):
