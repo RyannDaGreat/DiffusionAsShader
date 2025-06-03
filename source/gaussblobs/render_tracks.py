@@ -1,3 +1,4 @@
+import rp
 import sys, os
 import torch
 import numpy as np
@@ -26,7 +27,7 @@ def subdivide_track_grids(tracks, new_TH, new_TW):
 def soak_track_grids(track_grids, video):
     #Concat RGBA to the XYZV from the video at appropriate places
 
-    T, TH, TW, RGBA, XYZV = validate_tensor_shapes(
+    T, TH, TW, RGBA, XYZV = rp.validate_tensor_shapes(
         track_grids        = 'torch: T TH TW XYZV',
         video              = 'torch: T RGBA VH VW',
         RGBA = 4,
@@ -38,7 +39,7 @@ def soak_track_grids(track_grids, video):
     for track_grid, frame in zip(track_grids, video):
         assert track_grid.shape == (TH, TW, XYZV)
 
-        soaked_image = torch_remap_image(
+        soaked_image = rp.torch_remap_image(
             image=frame,
             x=track_grid[:, :, 0],
             y=track_grid[:, :, 1],
@@ -96,7 +97,7 @@ def draw_soaked_track_grids(soaked_track_grids, VH:int, VW:int):
     video_np = _draw_soaked_track_grids_numba(soaked_track_grids_np, VH, VW)
     video = torch.from_numpy(video_np)
 
-    validate_tensor_shapes(
+    rp.validate_tensor_shapes(
         soaked_track_grids    = "torch: T TH TW XYZVRGBA ",
         soaked_track_grids_np = "numpy: T TH TW XYZVRGBA ",
         video_np              = "numpy: T RGBA VH VW     ",
@@ -146,22 +147,22 @@ sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-ALNgmWCI9o_376096922_
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-ZZpM1eWAf4_445739054_463467123"
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-_GuKxi7u8A_107214497_114095456"
 
-with SetCurrentDirectoryTemporarily(sample_dir):
+with rp.SetCurrentDirectoryTemporarily(sample_dir):
 
-    video_tracks  = as_easydict(torch.load("video.mp4__DiffusionAsShaderCondition/video_tracks_spatracker.pt"                                      , map_location="cpu"))
-    counter_tracks= as_easydict(torch.load("firstLastInterp_Jack2000.mp4__DiffusionAsShaderCondition/firstLastInterp_Jack2000_tracks_spatracker.pt", map_location="cpu"))
+    video_tracks  = rp.as_easydict(torch.load("video.mp4__DiffusionAsShaderCondition/video_tracks_spatracker.pt"                                      , map_location="cpu"))
+    counter_tracks= rp.as_easydict(torch.load("firstLastInterp_Jack2000.mp4__DiffusionAsShaderCondition/firstLastInterp_Jack2000_tracks_spatracker.pt", map_location="cpu"))
 
     video_tracks   = torch.concat([video_tracks  .tracks, video_tracks  .visibility[:,:,None]],2)
     counter_tracks = torch.concat([counter_tracks.tracks, counter_tracks.visibility[:,:,None]],2)
 
-    video         = load_video("video.mp4"            , use_cache=True)
-    counter_video = load_video("firstLastInterp_Jack2000.mp4", use_cache=True)
+    video         = rp.load_video("video.mp4"            , use_cache=True)
+    counter_video = rp.load_video("firstLastInterp_Jack2000.mp4", use_cache=True)
 
-    video = resize_images(video,size=(480,720))
-    video=resize_list(video,49)
+    video = rp.resize_images(video,size=(480,720))
+    video=rp.resize_list(video,49)
 
-    video         = as_torch_images(video        )
-    counter_video = as_torch_images(counter_video)
+    video         = rp.as_torch_images(video        )
+    counter_video = rp.as_torch_images(counter_video)
     
     # Add alpha channel to videos (set to 1.0)
     video = torch.cat([video, torch.ones_like(video[:, :1])], dim=1)
@@ -179,7 +180,7 @@ with SetCurrentDirectoryTemporarily(sample_dir):
 TH = 70 #Tracks height
 TW = 70 #Tracks width
 
-T, N, VH, VW = validate_tensor_shapes(
+T, N, VH, VW = rp.validate_tensor_shapes(
     video_tracks   = "torch: T N XYZV",
     counter_tracks = "torch: T N XYZV",
     video          = "torch: T RGBA VH VW",
@@ -202,11 +203,11 @@ print('choose')
 counter_track_grids = subdivide_track_grids(counter_tracks, THS, TWS)
 print('choaws')
 
-validate_tensor_shapes(
+rp.validate_tensor_shapes(
     counter_track_grids = "torch: T THS TWS XYZV",
     video_track_grids   = "torch: T THS TWS XYZV",
     XYZV=4,
-    **gather_vars("T TWS TWS"),
+    **rp.gather_vars("T TWS TWS"),
 )
 
 
@@ -228,7 +229,7 @@ soak_track_grids[:,:,:,]
 counter_drawn_video = draw_soaked_track_grids(soaked_track_grids, VH, VW)
 
 counter_drawn_video_np = rp.as_numpy_images(counter_drawn_video)
-counter_drawn_video_np =with_alpha_checkerboards(counter_drawn_video_np)
+counter_drawn_video_np =rp.with_alpha_checkerboards(counter_drawn_video_np)
 
 ###
 
@@ -237,8 +238,8 @@ counter_drawn_video_overlaid = (
     1 - counter_drawn_video_alpha
 ) * counter_video + counter_drawn_video_alpha * counter_drawn_video
 
-preview_video = vertically_concatenated_videos(
-    as_numpy_videos(
+preview_video = rp.vertically_concatenated_videos(
+    rp.as_numpy_videos(
         [
             video,
             counter_drawn_video_np,
@@ -248,5 +249,5 @@ preview_video = vertically_concatenated_videos(
     )
 )
 
-save_video_mp4(preview_video,framerate=20)
-display_image_slideshow(preview_video)
+rp.save_video_mp4(preview_video,framerate=20)
+rp.display_image_slideshow(preview_video)
