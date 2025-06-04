@@ -468,59 +468,60 @@ sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-ALNgmWCI9o_376096922_
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-ZZpM1eWAf4_445739054_463467123"
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-_GuKxi7u8A_107214497_114095456"
 
-with rp.SetCurrentDirectoryTemporarily(sample_dir):
+@rp.globalize_locals
+def main():
+    with rp.SetCurrentDirectoryTemporarily(sample_dir):
 
-    video_tracks  = rp.as_easydict(torch.load("video.mp4__DiffusionAsShaderCondition/video_tracks_spatracker.pt"                                      , map_location="cpu"))
-    counter_tracks= rp.as_easydict(torch.load("firstLastInterp_Jack2000.mp4__DiffusionAsShaderCondition/firstLastInterp_Jack2000_tracks_spatracker.pt", map_location="cpu"))
+        video_tracks  = rp.as_easydict(torch.load("video.mp4__DiffusionAsShaderCondition/video_tracks_spatracker.pt"                                      , map_location="cpu"))
+        counter_tracks= rp.as_easydict(torch.load("firstLastInterp_Jack2000.mp4__DiffusionAsShaderCondition/firstLastInterp_Jack2000_tracks_spatracker.pt", map_location="cpu"))
 
-    video_tracks   = torch.concat([video_tracks  .tracks, video_tracks  .visibility[:,:,None]],2)
-    counter_tracks = torch.concat([counter_tracks.tracks, counter_tracks.visibility[:,:,None]],2)
+        video_tracks   = torch.concat([video_tracks  .tracks, video_tracks  .visibility[:,:,None]],2)
+        counter_tracks = torch.concat([counter_tracks.tracks, counter_tracks.visibility[:,:,None]],2)
 
-    video         = rp.load_video("video.mp4"            , use_cache=True)
-    counter_video = rp.load_video("firstLastInterp_Jack2000.mp4", use_cache=True)
+        video         = rp.load_video("video.mp4"            , use_cache=True)
+        counter_video = rp.load_video("firstLastInterp_Jack2000.mp4", use_cache=True)
 
-    video = rp.resize_images(video,size=(480,720))
-    video=rp.resize_list(video,49)
+        video = rp.resize_images(video,size=(480,720))
+        video=rp.resize_list(video,49)
 
-    video         = rp.as_torch_images(video        )
-    counter_video = rp.as_torch_images(counter_video)
+        video         = rp.as_torch_images(video        )
+        counter_video = rp.as_torch_images(counter_video)
 
-    # Add alpha channel to videos (set to 1.0)
-    video = torch.cat([video, torch.ones_like(video[:, :1])], dim=1)
-    counter_video = torch.cat([counter_video, torch.ones_like(counter_video[:, :1])], dim=1)
+        # Add alpha channel to videos (set to 1.0)
+        video = torch.cat([video, torch.ones_like(video[:, :1])], dim=1)
+        counter_video = torch.cat([counter_video, torch.ones_like(counter_video[:, :1])], dim=1)
 
-    #counter_video = counter_video.flip(0)
-    #counter_tracks = counter_tracks.flip(0)
+        #counter_video = counter_video.flip(0)
+        #counter_tracks = counter_tracks.flip(0)
 
-    # counter_video = video.flip(0)
-    # counter_tracks = video_tracks.flip(0)
+        # counter_video = video.flip(0)
+        # counter_tracks = video_tracks.flip(0)
 
+    #After counting the dots, I found the default spatialtracker results in a 70x70 grid.
+    TH = 70 #Tracks height
+    TW = 70 #Tracks width
 
-
-#After counting the dots, I found the default spatialtracker results in a 70x70 grid.
-TH = 70 #Tracks height
-TW = 70 #Tracks width
-
-T, N, VH, VW = rp.validate_tensor_shapes(
-    video_tracks   = "torch: T N XYZV",
-    counter_tracks = "torch: T N XYZV",
-    video          = "torch: T C VH VW",
-    counter_video  = "torch: T C VH VW",
-    N   = TH * TW,
-    XYZV = 4,
-    C = video.shape[1],
-    return_dims = 'T N VH VW',
-    verbose     = 'white white altbw green',
-)
-
+    T, N, VH, VW = rp.validate_tensor_shapes(
+        video_tracks   = "torch: T N XYZV",
+        counter_tracks = "torch: T N XYZV",
+        video          = "torch: T C VH VW",
+        counter_video  = "torch: T C VH VW",
+        N = TH * TW,
+        XYZV = 4,
+        return_dims = 'T N VH VW',
+        verbose     = 'white white altbw green',
+    )
 
 
-# Run video warp visualization
-warp_results = video_warp(video, counter_video, video_tracks, counter_tracks)
-rp.save_video_mp4(warp_results.preview_video, framerate=20)
-rp.display_image_slideshow(warp_results.preview_video)
+    # Run video warp visualization
+    warp_results = video_warp(video, counter_video, video_tracks, counter_tracks)
+    rp.save_video_mp4(warp_results.preview_video, framerate=20)
+    rp.display_image_slideshow(warp_results.preview_video)
 
-# Run blob visualization
-blob_results = draw_blobs_videos(video, counter_video, video_tracks, counter_tracks)
-rp.save_video_mp4(blob_results.gaussian_preview, "gaussian_tracks_visualization.mp4", framerate=20)
-rp.display_image_slideshow(blob_results.gaussian_preview)
+    # Run blob visualization
+    blob_results = draw_blobs_videos(video, counter_video, video_tracks, counter_tracks)
+    rp.save_video_mp4(blob_results.gaussian_preview, "gaussian_tracks_visualization.mp4", framerate=20)
+    rp.display_image_slideshow(blob_results.gaussian_preview)
+
+if __name__=='__main__':
+    main()
