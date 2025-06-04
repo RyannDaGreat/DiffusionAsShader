@@ -135,6 +135,78 @@ def _draw_soaked_track_grid_gaussians_numba(soaked_track_grids_np, VH, VW, sigma
 
     return video_np
 
+@numba.njit(parallel=True)
+def _draw_multiple_gaussians_numba(tracks_np, counter_tracks_np, colors_np, VH, VW, sigma):
+    # Optimized numba function to render multiple gaussians at once
+    T, num_tracks, XYZV = tracks_np.shape
+    num_colors, C = colors_np.shape
+    Xi, Yi, Zi, Vi = 0, 1, 2, 3
+    
+    video_np = np.zeros((T, C, VH, VW), dtype=np.float32)
+    counter_video_np = np.zeros((T, C, VH, VW), dtype=np.float32)
+    
+    # Precompute gaussian radius (3 sigma cutoff for efficiency)
+    radius = int(np.ceil(3.0 * sigma))
+    inv_2sigma_sq = 1.0 / (2.0 * sigma * sigma)
+    
+    for t in numba.prange(T):
+        for track_idx in range(min(num_tracks, num_colors)):
+            color_idx = track_idx % num_colors
+            
+            # Original track
+            center_x = tracks_np[t, track_idx, Xi]
+            center_y = tracks_np[t, track_idx, Yi]
+            vv = int(tracks_np[t, track_idx, Vi])
+            
+            if vv:
+                # Draw gaussian blob for original track
+                for dy in range(-radius, radius + 1):
+                    for dx in range(-radius, radius + 1):
+                        px = int(center_x + dx)
+                        py = int(center_y + dy)
+                        
+                        if 0 <= py < VH and 0 <= px < VW:
+                            # Calculate gaussian weight
+                            dist_sq = dx * dx + dy * dy
+                            gauss_weight = np.exp(-dist_sq * inv_2sigma_sq)
+                            
+                            # Alpha composite all channels
+                            for c in range(C):
+                                color_value = colors_np[color_idx, c]
+                                alpha = color_value * gauss_weight if C != 4 else colors_np[color_idx, 3] * gauss_weight
+                                
+                                # Alpha compositing: new_color = old_color * (1 - alpha) + new_color * alpha
+                                one_minus_alpha = 1.0 - alpha
+                                video_np[t, c, py, px] = video_np[t, c, py, px] * one_minus_alpha + color_value * alpha
+            
+            # Counter track
+            counter_center_x = counter_tracks_np[t, track_idx, Xi]
+            counter_center_y = counter_tracks_np[t, track_idx, Yi]
+            counter_vv = int(counter_tracks_np[t, track_idx, Vi])
+            
+            if counter_vv:
+                # Draw gaussian blob for counter track
+                for dy in range(-radius, radius + 1):
+                    for dx in range(-radius, radius + 1):
+                        px = int(counter_center_x + dx)
+                        py = int(counter_center_y + dy)
+                        
+                        if 0 <= py < VH and 0 <= px < VW:
+                            # Calculate gaussian weight
+                            dist_sq = dx * dx + dy * dy
+                            gauss_weight = np.exp(-dist_sq * inv_2sigma_sq)
+                            
+                            # Alpha composite all channels
+                            for c in range(C):
+                                color_value = colors_np[color_idx, c]
+                                alpha = color_value * gauss_weight if C != 4 else colors_np[color_idx, 3] * gauss_weight
+                                
+                                # Alpha compositing: new_color = old_color * (1 - alpha) + new_color * alpha
+                                one_minus_alpha = 1.0 - alpha
+                                counter_video_np[t, c, py, px] = counter_video_np[t, c, py, px] * one_minus_alpha + color_value * alpha
+    
+    return video_np, counter_video_np
+
 def draw_soaked_track_grids(soaked_track_grids, VH:int, VW:int):
     # Convert to numpy for numba processing, then back to torch
     # Force float32 to avoid float16 issues on macOS
@@ -174,6 +246,7 @@ def draw_soaked_track_grid_gaussians(soaked_track_grids, VH:int, VW:int, sigma:f
 def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42, blob_colors=None):
     """
     Select random tracks and render them as gaussian blobs with distinct colors.
+    Optimized version that minimizes torch-numpy conversions.
 
     Args:
         tracks: torch tensor [T, N, XYZV] - original video tracks
@@ -210,48 +283,23 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42,
     # Select random track indices based on number of colors
     selected_indices = torch.randperm(N)[:num_blobs]
 
-    # Create black background videos with appropriate number of channels
-    video_gaussians         = torch.zeros((T, C, VH, VW), dtype=tracks.dtype)
-    counter_video_gaussians = torch.zeros((T, C, VH, VW), dtype=tracks.dtype)
+    # Extract selected tracks for both videos - do this once
+    selected_tracks = tracks[:, selected_indices, :]  # [T, num_blobs, XYZV]
+    selected_counter_tracks = counter_tracks[:, selected_indices, :]  # [T, num_blobs, XYZV]
 
-    # Process each selected track
-    for i, track_idx in enumerate(selected_indices):
-        color = colors[i]
+    # Convert to numpy once for numba processing
+    selected_tracks_np = selected_tracks.cpu().float().numpy()
+    selected_counter_tracks_np = selected_counter_tracks.cpu().float().numpy()
+    colors_np = colors.cpu().float().numpy()
 
-        # Extract single track for both videos
-        single_track = tracks[:, track_idx:track_idx+1, :]  # [T, 1, XYZV]
-        single_counter_track = counter_tracks[:, track_idx:track_idx+1, :]  # [T, 1, XYZV]
+    # Call optimized numba function that handles all gaussians at once
+    video_np, counter_video_np = _draw_multiple_gaussians_numba(
+        selected_tracks_np, selected_counter_tracks_np, colors_np, VH, VW, sigma
+    )
 
-        # Reshape to grid format (1x1 grid since it's a single track)
-        track_grid = single_track.view(T, 1, 1, XYZV)
-        counter_track_grid = single_counter_track.view(T, 1, 1, XYZV)
-
-        # Create soaked track grids with the assigned color
-        soaked_track_grid = torch.cat([
-            track_grid,  # XYZV
-            color.view(1, 1, 1, C).expand(T, 1, 1, C)  # Color channels
-        ], dim=3)  # [T, 1, 1, XYZV+C]
-
-        soaked_counter_track_grid = torch.cat([
-            counter_track_grid,  # XYZV
-            color.view(1, 1, 1, C).expand(T, 1, 1, C)  # Color channels
-        ], dim=3)  # [T, 1, 1, XYZV+C]
-
-        # Draw gaussians for this track
-        track_video = draw_soaked_track_grid_gaussians(soaked_track_grid, VH, VW, sigma)
-        counter_track_video = draw_soaked_track_grid_gaussians(soaked_counter_track_grid, VH, VW, sigma)
-
-        # Alpha composite onto the accumulating videos using the last channel as alpha if available
-        if C == 4:  # RGBA case - use alpha channel
-            track_alpha = track_video[:, 3:4, :, :]
-            counter_alpha = counter_track_video[:, 3:4, :, :]
-        else:  # For other channels, use binary mask
-            track_alpha = (track_video > 0).any(dim=1, keepdim=True).float()
-            counter_alpha = (counter_track_video > 0).any(dim=1, keepdim=True).float()
-
-        # Alpha compositing: result = old * (1 - alpha) + new * alpha
-        video_gaussians = video_gaussians * (1 - track_alpha) + track_video * track_alpha
-        counter_video_gaussians = counter_video_gaussians * (1 - counter_alpha) + counter_track_video * counter_alpha
+    # Convert back to torch once
+    video_gaussians = torch.from_numpy(video_np)
+    counter_video_gaussians = torch.from_numpy(counter_video_np)
 
     rp.validate_tensor_shapes(
         tracks                      = "torch: T N XYZV           ",
