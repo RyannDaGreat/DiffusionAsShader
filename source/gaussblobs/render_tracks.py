@@ -400,7 +400,7 @@ def video_warp(video, counter_video, video_tracks, counter_tracks):
         "preview_video",
     )
 
-def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_colors=None, sigma=16):
+def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_colors=None, sigma=16, visualize=False):
     """
     Draw colored gaussian blob videos for selected tracks.
 
@@ -410,20 +410,58 @@ def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_c
         video_tracks: torch tensor [T, N, XYZV] - original video tracks
         counter_tracks: torch tensor [T, N, XYZV] - counterfactual video tracks
         blob_colors: list of colors, defaults to 7 standard colors
+        sigma: gaussian blob size
+        visualize: if True, generate visualization outputs; if False, only return gaussians
 
     Returns:
-        easydict containing gaussian videos and overlay visualizations
+        easydict containing gaussian videos and optionally overlay visualizations
     """
     # Generate gaussian blob videos first to determine channel count
     video_gaussians, counter_video_gaussians = random_7_gaussians_video(
         video_tracks, counter_tracks, video.shape[2], video.shape[3], sigma=sigma, blob_colors=blob_colors
     )
 
+    if not visualize:
+        # Return minimal output for performance
+        return rp.gather_vars(
+            "video_gaussians",
+            "counter_video_gaussians",
+        )
+
     T, C, VH, VW = video_gaussians.shape
 
-    # Resize input videos to match gaussian channel count
-    video = rp.crop_tensor(video, (T, C, VH, VW))
-    counter_video = rp.crop_tensor(counter_video, (T, C, VH, VW))
+    # Optimize tensor resizing - avoid crop_tensor overhead by doing direct operations
+    video_T, video_C, video_VH, video_VW = video.shape
+    counter_T, counter_C, counter_VH, counter_VW = counter_video.shape
+    
+    # Fast resize using slicing and padding instead of crop_tensor
+    if video_C != C:
+        if video_C < C:
+            # Pad with zeros
+            video = torch.cat([video, torch.zeros(video_T, C - video_C, video_VH, video_VW, dtype=video.dtype, device=video.device)], dim=1)
+        else:
+            # Truncate
+            video = video[:, :C]
+    
+    if counter_C != C:
+        if counter_C < C:
+            # Pad with zeros
+            counter_video = torch.cat([counter_video, torch.zeros(counter_T, C - counter_C, counter_VH, counter_VW, dtype=counter_video.dtype, device=counter_video.device)], dim=1)
+        else:
+            # Truncate
+            counter_video = counter_video[:, :C]
+
+    # Handle temporal dimension
+    if video_T != T:
+        video = video[:T] if video_T > T else torch.cat([video, video[-1:].expand(T - video_T, -1, -1, -1)], dim=0)
+    if counter_T != T:
+        counter_video = counter_video[:T] if counter_T > T else torch.cat([counter_video, counter_video[-1:].expand(T - counter_T, -1, -1, -1)], dim=0)
+
+    # Handle spatial dimensions if needed
+    if video_VH != VH or video_VW != VW:
+        video = torch.nn.functional.interpolate(video.view(-1, C, video_VH, video_VW), size=(VH, VW), mode='bilinear', align_corners=False).view(T, C, VH, VW)
+    if counter_VH != VH or counter_VW != VW:
+        counter_video = torch.nn.functional.interpolate(counter_video.view(-1, C, counter_VH, counter_VW), size=(VH, VW), mode='bilinear', align_corners=False).view(T, C, VH, VW)
 
     # Convert to numpy for display
     video_gaussians_np         = rp.as_numpy_images(video_gaussians)
@@ -567,7 +605,7 @@ def main():
     rp.display_image_slideshow(warp_results.preview_video)
 
     # Run blob visualization
-    blob_results = draw_blobs_videos(video, counter_video, video_tracks, counter_tracks)
+    blob_results = draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, visualize=True)
     rp.save_video_mp4(blob_results.gaussian_preview, "gaussian_tracks_visualization.mp4", framerate=20)
     rp.display_image_slideshow(blob_results.gaussian_preview)
 
