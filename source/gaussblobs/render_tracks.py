@@ -486,8 +486,8 @@ with rp.SetCurrentDirectoryTemporarily(sample_dir):
     #counter_video = counter_video.flip(0)
     #counter_tracks = counter_tracks.flip(0)
         
-    counter_video = video.flip(0)
-    counter_tracks = video_tracks.flip(0)
+    # counter_video = video.flip(0)
+    # counter_tracks = video_tracks.flip(0)
 
 
 
