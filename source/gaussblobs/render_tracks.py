@@ -271,6 +271,7 @@ def video_warp(video, counter_video, video_tracks, counter_tracks):
     
     # Create soaked track grids (tracks with colors from video)
     soaked_track_grids = soak_track_grids(video_track_grids, video)
+    # drawn_video = draw_soaked_track_grids(soaked_track_grids, VH, VW)
     drawn_video = draw_soaked_track_grid_gaussians(soaked_track_grids, VH, VW, sigma=5)
     
     # Create counter version - inherit colors but use counter positions
@@ -278,11 +279,16 @@ def video_warp(video, counter_video, video_tracks, counter_tracks):
     counter_soaked_track_grids[:,:,:,:2] = counter_track_grids[:,:,:,:2]  # Inherit the new XY
     counter_soaked_track_grids[:,:,:,3] *= counter_track_grids[:,:,:,3]  # Intersection of visibility
     
+    # counter_soaked_track_grids[:,:,:,3] = 1  # No invisibility anywhere 
+    
     # Draw counter video
+    # counter_drawn_video = draw_soaked_track_grids(counter_soaked_track_grids, VH, VW)
     counter_drawn_video = draw_soaked_track_grid_gaussians(counter_soaked_track_grids, VH, VW, sigma=5)
     
     # Convert for display
-    counter_drawn_video_np = rp.as_rgb_images(rp.as_numpy_images(counter_drawn_video))
+    counter_drawn_video_np = rp.as_numpy_images(counter_drawn_video)
+    # counter_drawn_video_np = rp.with_alpha_checkerboards(counter_drawn_video_np)
+    counter_drawn_video_np = rp.as_rgb_images(counter_drawn_video_np)
     
     # Create overlay
     counter_drawn_video_alpha = counter_drawn_video[:,3:4,:,:]
