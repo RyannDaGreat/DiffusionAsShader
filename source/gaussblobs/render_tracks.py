@@ -352,7 +352,7 @@ def video_warp(video, counter_video, video_tracks, counter_tracks):
         "preview_video",
     )
 
-def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_colors=None):
+def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_colors=None, sigma=16):
     """
     Draw colored gaussian blob videos for selected tracks.
 
@@ -368,7 +368,7 @@ def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_c
     """
     # Generate gaussian blob videos first to determine channel count
     video_gaussians, counter_video_gaussians = random_7_gaussians_video(
-        video_tracks, counter_tracks, video.shape[2], video.shape[3], sigma=16, blob_colors=blob_colors
+        video_tracks, counter_tracks, video.shape[2], video.shape[3], sigma=sigma, blob_colors=blob_colors
     )
 
     T, C, VH, VW = video_gaussians.shape
