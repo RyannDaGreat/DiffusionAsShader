@@ -244,6 +244,14 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42)
         video_gaussians = video_gaussians * (1 - track_alpha) + track_video * track_alpha
         counter_video_gaussians = counter_video_gaussians * (1 - counter_alpha) + counter_track_video * counter_alpha
     
+    rp.validate_tensor_shapes(
+        tracks                      = "torch: T N XYZV        ",
+        counter_tracks              = "torch: T N XYZV        ",
+        video_gaussians             = "torch: T RGBA VH VW    ",
+        counter_video_gaussians     = "torch: T RGBA VH VW    ",
+        XYZV=4, RGBA=4,
+    )
+    
     return video_gaussians, counter_video_gaussians
 
 def video_warp(video, counter_video, video_tracks, counter_tracks):
@@ -306,17 +314,32 @@ def video_warp(video, counter_video, video_tracks, counter_tracks):
         ])
     )
     
-    return rp.as_easydict({
-        'video_track_grids': video_track_grids,
-        'counter_track_grids': counter_track_grids,
-        'soaked_track_grids': soaked_track_grids,
-        'counter_soaked_track_grids': counter_soaked_track_grids,
-        'drawn_video': drawn_video,
-        'counter_drawn_video': counter_drawn_video,
-        'counter_drawn_video_np': counter_drawn_video_np,
-        'counter_drawn_video_overlaid': counter_drawn_video_overlaid,
-        'preview_video': preview_video,
-    })
+    rp.validate_tensor_shapes(
+        video                         = "torch: T RGBA VH VW      ",
+        counter_video                 = "torch: T RGBA VH VW      ",
+        video_tracks                  = "torch: T N XYZV          ",
+        counter_tracks                = "torch: T N XYZV          ",
+        video_track_grids             = "torch: T THS TWS XYZV    ",
+        counter_track_grids           = "torch: T THS TWS XYZV    ",
+        soaked_track_grids            = "torch: T THS TWS XYZVRGBA",
+        counter_soaked_track_grids    = "torch: T THS TWS XYZVRGBA",
+        drawn_video                   = "torch: T RGBA VH VW      ",
+        counter_drawn_video           = "torch: T RGBA VH VW      ",
+        counter_drawn_video_overlaid  = "torch: T RGBA VH VW      ",
+        RGBA=4, XYZV=4,
+    )
+    
+    return rp.gather_vars(
+        "video_track_grids",
+        "counter_track_grids",
+        "soaked_track_grids",
+        "counter_soaked_track_grids",
+        "drawn_video",
+        "counter_drawn_video",
+        "counter_drawn_video_np",
+        "counter_drawn_video_overlaid",
+        "preview_video",
+    )
 
 def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_colors=None):
     """
@@ -375,17 +398,29 @@ def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_c
         video_on_gaussians_np,
     ])
     
-    return rp.as_easydict({
-        'video_gaussians': video_gaussians,
-        'counter_video_gaussians': counter_video_gaussians,
-        'video_gaussians_np': video_gaussians_np,
-        'counter_video_gaussians_np': counter_video_gaussians_np,
-        'video_on_gaussians': video_on_gaussians,
-        'counter_on_gaussians': counter_on_gaussians,
-        'video_on_gaussians_np': video_on_gaussians_np,
-        'counter_on_gaussians_np': counter_on_gaussians_np,
-        'gaussian_preview': gaussian_preview,
-    })
+    rp.validate_tensor_shapes(
+        video                        = "torch: T RGBA VH VW    ",
+        counter_video                = "torch: T RGBA VH VW    ",
+        video_tracks                 = "torch: T N XYZV        ",
+        counter_tracks               = "torch: T N XYZV        ",
+        video_gaussians              = "torch: T RGBA VH VW    ",
+        counter_video_gaussians      = "torch: T RGBA VH VW    ",
+        video_on_gaussians           = "torch: T RGBA VH VW    ",
+        counter_on_gaussians         = "torch: T RGBA VH VW    ",
+        RGBA=4, XYZV=4,
+    )
+    
+    return rp.gather_vars(
+        "video_gaussians",
+        "counter_video_gaussians",
+        "video_gaussians_np",
+        "counter_video_gaussians_np",
+        "video_on_gaussians",
+        "counter_on_gaussians",
+        "video_on_gaussians_np",
+        "counter_on_gaussians_np",
+        "gaussian_preview",
+    )
 
 
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-7Cxuw5aZAY_405555963_425701967" #GOOD
