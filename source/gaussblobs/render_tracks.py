@@ -140,7 +140,8 @@ def _draw_soaked_track_grid_gaussians_numba(soaked_track_grids_np, VH, VW, sigma
 
 def draw_soaked_track_grids(soaked_track_grids, VH:int, VW:int):
     # Convert to numpy for numba processing, then back to torch
-    soaked_track_grids_np = soaked_track_grids.cpu().numpy()
+    # Force float32 to avoid float16 issues on macOS
+    soaked_track_grids_np = soaked_track_grids.cpu().float().numpy()
     video_np = _draw_soaked_track_grids_numba(soaked_track_grids_np, VH, VW)
     video = torch.from_numpy(video_np)
 
@@ -156,7 +157,8 @@ def draw_soaked_track_grids(soaked_track_grids, VH:int, VW:int):
 
 def draw_soaked_track_grid_gaussians(soaked_track_grids, VH:int, VW:int, sigma:float):
     # Convert to numpy for numba processing, then back to torch
-    soaked_track_grids_np = soaked_track_grids.cpu().numpy()
+    # Force float32 to avoid float16 issues on macOS
+    soaked_track_grids_np = soaked_track_grids.cpu().float().numpy()
     video_np = _draw_soaked_track_grid_gaussians_numba(soaked_track_grids_np, VH, VW, sigma)
     video = torch.from_numpy(video_np)
 
@@ -169,6 +171,80 @@ def draw_soaked_track_grid_gaussians(soaked_track_grids, VH:int, VW:int, sigma:f
     )
     
     return video
+
+def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42):
+    """
+    Select 7 random tracks and render them as gaussian blobs with distinct colors.
+    
+    Args:
+        tracks: torch tensor [T, N, XYZV] - original video tracks
+        counter_tracks: torch tensor [T, N, XYZV] - counterfactual video tracks  
+        VH, VW: output video height and width
+        sigma: gaussian blob size
+        seed: random seed for reproducible track selection
+        
+    Returns:
+        tuple of (video_gaussians, counter_video_gaussians) - both [T, RGBA, VH, VW]
+    """
+    T, N, XYZV = tracks.shape
+    
+    # Set random seed for reproducible selection
+    torch.manual_seed(seed)
+    
+    # Select 7 random track indices
+    selected_indices = torch.randperm(N)[:7]
+    
+    # Define 7 distinct colors: red, green, blue, white, cyan, magenta, yellow
+    colors = torch.tensor([
+        [1.0, 0.0, 0.0, 1.0],  # red
+        [0.0, 1.0, 0.0, 1.0],  # green
+        [0.0, 0.0, 1.0, 1.0],  # blue
+        [1.0, 1.0, 1.0, 1.0],  # white
+        [0.0, 1.0, 1.0, 1.0],  # cyan
+        [1.0, 0.0, 1.0, 1.0],  # magenta
+        [1.0, 1.0, 0.0, 1.0],  # yellow
+    ], dtype=tracks.dtype)
+    
+    # Create black background videos
+    video_gaussians = torch.zeros((T, 4, VH, VW), dtype=tracks.dtype)
+    counter_video_gaussians = torch.zeros((T, 4, VH, VW), dtype=tracks.dtype)
+    
+    # Process each selected track
+    for i, track_idx in enumerate(selected_indices):
+        color = colors[i]
+        
+        # Extract single track for both videos
+        single_track = tracks[:, track_idx:track_idx+1, :]  # [T, 1, XYZV]
+        single_counter_track = counter_tracks[:, track_idx:track_idx+1, :]  # [T, 1, XYZV]
+        
+        # Reshape to grid format (1x1 grid since it's a single track)
+        track_grid = single_track.view(T, 1, 1, XYZV)
+        counter_track_grid = single_counter_track.view(T, 1, 1, XYZV)
+        
+        # Create soaked track grids with the assigned color
+        soaked_track_grid = torch.cat([
+            track_grid,  # XYZV
+            color.view(1, 1, 1, 4).expand(T, 1, 1, 4)  # RGBA
+        ], dim=3)  # [T, 1, 1, XYZV+RGBA]
+        
+        soaked_counter_track_grid = torch.cat([
+            counter_track_grid,  # XYZV  
+            color.view(1, 1, 1, 4).expand(T, 1, 1, 4)  # RGBA
+        ], dim=3)  # [T, 1, 1, XYZV+RGBA]
+        
+        # Draw gaussians for this track
+        track_video = draw_soaked_track_grid_gaussians(soaked_track_grid, VH, VW, sigma)
+        counter_track_video = draw_soaked_track_grid_gaussians(soaked_counter_track_grid, VH, VW, sigma)
+        
+        # Alpha composite onto the accumulating videos
+        track_alpha = track_video[:, 3:4, :, :]
+        counter_alpha = counter_track_video[:, 3:4, :, :]
+        
+        # Alpha compositing: result = old * (1 - alpha) + new * alpha
+        video_gaussians = video_gaussians * (1 - track_alpha) + track_video * track_alpha
+        counter_video_gaussians = counter_video_gaussians * (1 - counter_alpha) + counter_track_video * counter_alpha
+    
+    return video_gaussians, counter_video_gaussians
 
 
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-7Cxuw5aZAY_405555963_425701967" #GOOD
@@ -260,11 +336,8 @@ T, N, VH, VW = rp.validate_tensor_shapes(
 #Upscale the tracks...
 THS = VH//16 #1 #Tracks height subdivided
 TWS = VW//16 #1 #Tracks width subdivided
-print('cheese')
 video_track_grids   = subdivide_track_grids(video_tracks  , THS, TWS)
-print('choose')
 counter_track_grids = subdivide_track_grids(counter_tracks, THS, TWS)
-print('choaws')
 
 rp.validate_tensor_shapes(
     counter_track_grids = "torch: T THS TWS XYZV",
@@ -315,3 +388,38 @@ preview_video = rp.vertically_concatenated_videos(
 
 rp.save_video_mp4(preview_video,framerate=20)
 rp.display_image_slideshow(preview_video)
+
+# Test the new random 7 gaussians visualization
+video_gaussians, counter_video_gaussians = random_7_gaussians_video(
+    video_tracks, counter_tracks, VH, VW, sigma=16
+)
+
+# Convert to numpy for display
+video_gaussians_np = rp.as_numpy_images(video_gaussians)
+counter_video_gaussians_np = rp.as_numpy_images(counter_video_gaussians)
+
+# Create overlays: replace video pixels with gaussian pixels wherever gaussians are not black
+# Check if any RGB channel is non-zero (not exactly black)
+video_mask = (video_gaussians[:, :3, :, :] > 0).any(dim=1, keepdim=True)  # [T, 1, VH, VW]
+counter_mask = (counter_video_gaussians[:, :3, :, :] > 0).any(dim=1, keepdim=True)  # [T, 1, VH, VW]
+
+# Expand mask to all 4 channels (RGBA)
+video_mask = video_mask.expand(-1, 4, -1, -1)
+counter_mask = counter_mask.expand(-1, 4, -1, -1)
+
+# Replace video pixels with gaussian pixels where mask is True, otherwise keep video
+video_on_gaussians = torch.where(video_mask, video_gaussians, video)
+counter_on_gaussians = torch.where(counter_mask, counter_video_gaussians, counter_video)
+
+# Convert overlays to numpy
+video_on_gaussians_np = rp.as_numpy_images(video_on_gaussians)
+counter_on_gaussians_np = rp.as_numpy_images(counter_on_gaussians)
+
+# Create side-by-side visualization: [counter_on_gaussians | video_on_gaussians]
+gaussian_preview = rp.horizontally_concatenated_videos([
+    counter_on_gaussians_np,
+    video_on_gaussians_np,
+])
+
+rp.save_video_mp4(gaussian_preview, "gaussian_tracks_visualization.mp4", framerate=20)
+rp.display_image_slideshow(gaussian_preview)
