@@ -12,13 +12,13 @@ def subdivide_track_grids(tracks, new_TH, new_TW):
 
     upsampled = rearrange(track_grids, 'T TH TW XYZV -> T XYZV TH TW')
     upsampled = torch.nn.functional.interpolate(
-        upsampled, 
-        size=(new_TH, new_TW), 
-        mode='bilinear', 
+        upsampled,
+        size=(new_TH, new_TW),
+        mode='bilinear',
         align_corners=True
     )
     upsampled = rearrange(upsampled, 'T XYZV TH TW -> T TH TW XYZV')
-    
+
     return upsampled
 
 def soak_track_grids(track_grids, video):
@@ -58,9 +58,9 @@ def soak_track_grids(track_grids, video):
     soaked_track_grids = torch.stack(soaked_track_grids)
 
     assert soaked_track_grids.shape == (T, TH, TW, XYZV + C)
-    
+
     return soaked_track_grids
-    
+
 @numba.njit(parallel=True)
 def _draw_soaked_track_grids_numba(soaked_track_grids_np, VH, VW):
     # Numba implementation for better performance
@@ -68,10 +68,10 @@ def _draw_soaked_track_grids_numba(soaked_track_grids_np, VH, VW):
     XYZV = 4
     C = XYZVC - XYZV
     Xi, Yi, Zi, Vi, Ci = 0, 1, 2, 3, 4
-    
+
     video_np   = np.zeros((T, C, VH, VW),               dtype=np.float32)
     video_np_z = np.full ((T,    VH, VW), float('inf'), dtype=np.float32)
-    
+
     for t in numba.prange(T):
         for ty in range(TH):
             for tx in range(TW):
@@ -79,14 +79,14 @@ def _draw_soaked_track_grids_numba(soaked_track_grids_np, VH, VW):
                 vy = int(soaked_track_grids_np[t, ty, tx, Yi])
                 vz =     soaked_track_grids_np[t, ty, tx, Zi]
                 vv = int(soaked_track_grids_np[t, ty, tx, Vi])
-                
+
                 old_z = video_np_z[t, vy, vx]
-                
+
                 if vz<old_z and vv and 0 <= vy < VH and 0 <= vx < VW:
                     for c in range(C):
                         video_np[t, c, vy, vx] = soaked_track_grids_np[t, ty, tx, Ci + c]
                     video_np_z[t, vy, vx] = vz
-    
+
     return video_np
 
 @numba.njit(parallel=True)
@@ -96,12 +96,12 @@ def _draw_soaked_track_grid_gaussians_numba(soaked_track_grids_np, VH, VW, sigma
     XYZV = 4
     C = XYZVC - XYZV
     Xi, Yi, Zi, Vi, Ci = 0, 1, 2, 3, 4
-    
+
     video_np = np.zeros((T, C, VH, VW), dtype=np.float32)
-    
+
     # Precompute gaussian radius (3 sigma cutoff for efficiency)
     radius = int(np.ceil(3.0 * sigma))
-    
+
     for t in numba.prange(T):
         for ty in range(TH):
             for tx in range(TW):
@@ -109,30 +109,30 @@ def _draw_soaked_track_grid_gaussians_numba(soaked_track_grids_np, VH, VW, sigma
                 center_y = soaked_track_grids_np[t, ty, tx, Yi]
                 vz = soaked_track_grids_np[t, ty, tx, Zi]
                 vv = int(soaked_track_grids_np[t, ty, tx, Vi])
-                
+
                 if not vv:
                     continue
-                
+
                 # Draw gaussian blob
                 for dy in range(-radius, radius + 1):
                     for dx in range(-radius, radius + 1):
                         px = int(center_x + dx)
                         py = int(center_y + dy)
-                        
+
                         if 0 <= py < VH and 0 <= px < VW:
                             # Calculate gaussian weight
                             dist_sq = dx * dx + dy * dy
                             gauss_weight = np.exp(-dist_sq / (2.0 * sigma * sigma))
-                            
+
                             # Alpha composite all channels
                             for c in range(C):
                                 color_value = soaked_track_grids_np[t, ty, tx, Ci + c]
                                 alpha = color_value * gauss_weight if C != 4 else soaked_track_grids_np[t, ty, tx, Ci + 3] * gauss_weight
-                                
+
                                 # Alpha compositing: new_color = old_color * (1 - alpha) + new_color * alpha
                                 one_minus_alpha = 1.0 - alpha
                                 video_np[t, c, py, px] = video_np[t, c, py, px] * one_minus_alpha + color_value * alpha
-    
+
     return video_np
 
 def draw_soaked_track_grids(soaked_track_grids, VH:int, VW:int):
@@ -150,7 +150,7 @@ def draw_soaked_track_grids(soaked_track_grids, VH:int, VW:int):
         video                 = "torch: T C VH VW       ",
         XYZV=4, C=C,
     )
-    
+
     return video
 
 def draw_soaked_track_grid_gaussians(soaked_track_grids, VH:int, VW:int, sigma:float):
@@ -168,26 +168,26 @@ def draw_soaked_track_grid_gaussians(soaked_track_grids, VH:int, VW:int, sigma:f
         video                 = "torch: T C VH VW       ",
         XYZV=4, C=C,
     )
-    
+
     return video
 
 def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42, blob_colors=None):
     """
     Select random tracks and render them as gaussian blobs with distinct colors.
-    
+
     Args:
         tracks: torch tensor [T, N, XYZV] - original video tracks
-        counter_tracks: torch tensor [T, N, XYZV] - counterfactual video tracks  
+        counter_tracks: torch tensor [T, N, XYZV] - counterfactual video tracks
         VH, VW: output video height and width
         sigma: gaussian blob size
         seed: random seed for reproducible track selection
         blob_colors: list of color tensors, defaults to 7 RGBA colors
-        
+
     Returns:
         tuple of (video_gaussians, counter_video_gaussians) - both [T, C, VH, VW] where C is determined by color channels
     """
     T, N, XYZV = tracks.shape
-    
+
     # Set default colors if none provided
     if blob_colors is None:
         blob_colors = [
@@ -199,48 +199,48 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42,
             [1, 1, 0, 1],  # yellow
             [1, 1, 1, 1],  # white
         ]
-    
+
     # Convert to tensor and get dimensions
     colors = torch.tensor(blob_colors, dtype=tracks.dtype)
     num_blobs, C = colors.shape
-    
+
     # Set random seed for reproducible selection
     torch.manual_seed(seed)
-    
+
     # Select random track indices based on number of colors
     selected_indices = torch.randperm(N)[:num_blobs]
-    
+
     # Create black background videos with appropriate number of channels
     video_gaussians         = torch.zeros((T, C, VH, VW), dtype=tracks.dtype)
     counter_video_gaussians = torch.zeros((T, C, VH, VW), dtype=tracks.dtype)
-    
+
     # Process each selected track
     for i, track_idx in enumerate(selected_indices):
         color = colors[i]
-        
+
         # Extract single track for both videos
         single_track = tracks[:, track_idx:track_idx+1, :]  # [T, 1, XYZV]
         single_counter_track = counter_tracks[:, track_idx:track_idx+1, :]  # [T, 1, XYZV]
-        
+
         # Reshape to grid format (1x1 grid since it's a single track)
         track_grid = single_track.view(T, 1, 1, XYZV)
         counter_track_grid = single_counter_track.view(T, 1, 1, XYZV)
-        
+
         # Create soaked track grids with the assigned color
         soaked_track_grid = torch.cat([
             track_grid,  # XYZV
             color.view(1, 1, 1, C).expand(T, 1, 1, C)  # Color channels
         ], dim=3)  # [T, 1, 1, XYZV+C]
-        
+
         soaked_counter_track_grid = torch.cat([
-            counter_track_grid,  # XYZV  
+            counter_track_grid,  # XYZV
             color.view(1, 1, 1, C).expand(T, 1, 1, C)  # Color channels
         ], dim=3)  # [T, 1, 1, XYZV+C]
-        
+
         # Draw gaussians for this track
         track_video = draw_soaked_track_grid_gaussians(soaked_track_grid, VH, VW, sigma)
         counter_track_video = draw_soaked_track_grid_gaussians(soaked_counter_track_grid, VH, VW, sigma)
-        
+
         # Alpha composite onto the accumulating videos using the last channel as alpha if available
         if C == 4:  # RGBA case - use alpha channel
             track_alpha = track_video[:, 3:4, :, :]
@@ -248,11 +248,11 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42,
         else:  # For other channels, use binary mask
             track_alpha = (track_video > 0).any(dim=1, keepdim=True).float()
             counter_alpha = (counter_track_video > 0).any(dim=1, keepdim=True).float()
-        
+
         # Alpha compositing: result = old * (1 - alpha) + new * alpha
         video_gaussians = video_gaussians * (1 - track_alpha) + track_video * track_alpha
         counter_video_gaussians = counter_video_gaussians * (1 - counter_alpha) + counter_track_video * counter_alpha
-    
+
     rp.validate_tensor_shapes(
         tracks                      = "torch: T N XYZV           ",
         counter_tracks              = "torch: T N XYZV           ",
@@ -261,59 +261,59 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42,
         counter_video_gaussians     = "torch: T C VH VW          ",
         XYZV=4, C=C, num_blobs=num_blobs,
     )
-    
+
     return video_gaussians, counter_video_gaussians
 
 def video_warp(video, counter_video, video_tracks, counter_tracks):
     """
     Perform video warping and create all the standard visualization outputs.
-    
+
     Args:
         video: torch tensor [T, C, VH, VW] - original video
-        counter_video: torch tensor [T, C, VH, VW] - counterfactual video  
+        counter_video: torch tensor [T, C, VH, VW] - counterfactual video
         video_tracks: torch tensor [T, N, XYZV] - original video tracks
         counter_tracks: torch tensor [T, N, XYZV] - counterfactual video tracks
-        
+
     Returns:
         easydict containing all output videos and intermediate results
     """
     T, C, VH, VW = video.shape
     T, N, XYZV = video_tracks.shape
-    
+
     # Upscale the tracks
     THS = VH//16  # Tracks height subdivided
     TWS = VW//16  # Tracks width subdivided
-    
+
     video_track_grids = subdivide_track_grids(video_tracks, THS, TWS)
     counter_track_grids = subdivide_track_grids(counter_tracks, THS, TWS)
-    
+
     # Create soaked track grids (tracks with colors from video)
     soaked_track_grids = soak_track_grids(video_track_grids, video)
     # drawn_video = draw_soaked_track_grids(soaked_track_grids, VH, VW)
     drawn_video = draw_soaked_track_grid_gaussians(soaked_track_grids, VH, VW, sigma=5)
-    
+
     # Create counter version - inherit colors but use counter positions
     counter_soaked_track_grids = soaked_track_grids + 0  # Inherit the colors
     counter_soaked_track_grids[:,:,:,:2] = counter_track_grids[:,:,:,:2]  # Inherit the new XY
     counter_soaked_track_grids[:,:,:,3] *= counter_track_grids[:,:,:,3]  # Intersection of visibility
-    
-    # counter_soaked_track_grids[:,:,:,3] = 1  # No invisibility anywhere 
-    
+
+    # counter_soaked_track_grids[:,:,:,3] = 1  # No invisibility anywhere
+
     # Draw counter video
     # counter_drawn_video = draw_soaked_track_grids(counter_soaked_track_grids, VH, VW)
     counter_drawn_video = draw_soaked_track_grid_gaussians(counter_soaked_track_grids, VH, VW, sigma=5)
-    
+
     # Convert for display
     counter_drawn_video_np = rp.as_numpy_images(counter_drawn_video)
     # counter_drawn_video_np = rp.with_alpha_checkerboards(counter_drawn_video_np)
     counter_drawn_video_np = rp.as_rgb_images(counter_drawn_video_np)
-    
+
     # Create overlay
     counter_drawn_video_alpha = counter_drawn_video[:,3:4,:,:]
     counter_drawn_video_overlaid = (
         1 - counter_drawn_video_alpha
     ) * counter_video + counter_drawn_video_alpha * counter_drawn_video
-    
+
     # Create preview video
     preview_video = rp.vertically_concatenated_videos(
         rp.as_numpy_videos([
@@ -323,7 +323,7 @@ def video_warp(video, counter_video, video_tracks, counter_tracks):
             counter_video,
         ])
     )
-    
+
     T, C, VH, VW = video.shape
     rp.validate_tensor_shapes(
         video                         = "torch: T C VH VW      ",
@@ -339,7 +339,7 @@ def video_warp(video, counter_video, video_tracks, counter_tracks):
         counter_drawn_video_overlaid  = "torch: T C VH VW      ",
         C=C, XYZV=4, XYZVC=4+C,
     )
-    
+
     return rp.gather_vars(
         "video_track_grids",
         "counter_track_grids",
@@ -355,14 +355,14 @@ def video_warp(video, counter_video, video_tracks, counter_tracks):
 def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_colors=None):
     """
     Draw colored gaussian blob videos for selected tracks.
-    
+
     Args:
         video: torch tensor [T, C, VH, VW] - original video
         counter_video: torch tensor [T, C, VH, VW] - counterfactual video
-        video_tracks: torch tensor [T, N, XYZV] - original video tracks  
+        video_tracks: torch tensor [T, N, XYZV] - original video tracks
         counter_tracks: torch tensor [T, N, XYZV] - counterfactual video tracks
         blob_colors: list of colors, defaults to 7 standard colors
-        
+
     Returns:
         easydict containing gaussian videos and overlay visualizations
     """
@@ -370,34 +370,34 @@ def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_c
     video_gaussians, counter_video_gaussians = random_7_gaussians_video(
         video_tracks, counter_tracks, video.shape[2], video.shape[3], sigma=16, blob_colors=blob_colors
     )
-    
+
     T, C, VH, VW = video_gaussians.shape
-    
+
     # Resize input videos to match gaussian channel count
     video = rp.crop_tensor(video, (T, C, VH, VW))
     counter_video = rp.crop_tensor(counter_video, (T, C, VH, VW))
-    
+
     # Convert to numpy for display
     video_gaussians_np         = rp.as_numpy_images(video_gaussians)
     counter_video_gaussians_np = rp.as_numpy_images(counter_video_gaussians)
-    
+
     # Create overlays: replace video pixels with gaussian pixels wherever gaussians are not black
     video_mask   = (video_gaussians         > 0).any(dim=1, keepdim=True).expand(-1, C, -1, -1)
     counter_mask = (counter_video_gaussians > 0).any(dim=1, keepdim=True).expand(-1, C, -1, -1)
-    
+
     video_on_gaussians   = torch.where(video_mask  , video_gaussians        , video        )
     counter_on_gaussians = torch.where(counter_mask, counter_video_gaussians, counter_video)
-    
+
     # Convert overlays to numpy
     video_on_gaussians_np   = rp.as_numpy_images(video_on_gaussians  )
     counter_on_gaussians_np = rp.as_numpy_images(counter_on_gaussians)
-    
+
     # Create side-by-side visualization
     gaussian_preview = rp.horizontally_concatenated_videos(
         counter_on_gaussians_np,
         video_on_gaussians_np,
     )
-    
+
     rp.validate_tensor_shapes(
         video_tracks                 = "torch: T N XYZV ",
         counter_tracks               = "torch: T N XYZV ",
@@ -415,7 +415,7 @@ def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_c
         counter_on_gaussians_np      = "numpy: T VH VW C",
         XYZV=4, C=C, VH=VH, VW=VW, T=T,
     )
-    
+
     return rp.gather_vars(
         "video_gaussians",
         "counter_video_gaussians",
@@ -484,14 +484,14 @@ with rp.SetCurrentDirectoryTemporarily(sample_dir):
 
     video         = rp.as_torch_images(video        )
     counter_video = rp.as_torch_images(counter_video)
-    
+
     # Add alpha channel to videos (set to 1.0)
     video = torch.cat([video, torch.ones_like(video[:, :1])], dim=1)
     counter_video = torch.cat([counter_video, torch.ones_like(counter_video[:, :1])], dim=1)
-    
+
     #counter_video = counter_video.flip(0)
     #counter_tracks = counter_tracks.flip(0)
-        
+
     # counter_video = video.flip(0)
     # counter_tracks = video_tracks.flip(0)
 
