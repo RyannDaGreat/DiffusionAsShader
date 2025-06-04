@@ -246,6 +246,141 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42)
     
     return video_gaussians, counter_video_gaussians
 
+def video_warp(video, counter_video, video_tracks, counter_tracks):
+    """
+    Perform video warping and create all the standard visualization outputs.
+    
+    Args:
+        video: torch tensor [T, RGBA, VH, VW] - original video
+        counter_video: torch tensor [T, RGBA, VH, VW] - counterfactual video  
+        video_tracks: torch tensor [T, N, XYZV] - original video tracks
+        counter_tracks: torch tensor [T, N, XYZV] - counterfactual video tracks
+        
+    Returns:
+        easydict containing all output videos and intermediate results
+    """
+    T, RGBA, VH, VW = video.shape
+    T, N, XYZV = video_tracks.shape
+    
+    # Upscale the tracks
+    THS = VH//16  # Tracks height subdivided
+    TWS = VW//16  # Tracks width subdivided
+    
+    video_track_grids = subdivide_track_grids(video_tracks, THS, TWS)
+    counter_track_grids = subdivide_track_grids(counter_tracks, THS, TWS)
+    
+    # Create soaked track grids (tracks with colors from video)
+    soaked_track_grids = soak_track_grids(video_track_grids, video)
+    drawn_video = draw_soaked_track_grid_gaussians(soaked_track_grids, VH, VW, sigma=5)
+    
+    # Create counter version - inherit colors but use counter positions
+    counter_soaked_track_grids = soaked_track_grids + 0  # Inherit the colors
+    counter_soaked_track_grids[:,:,:,:2] = counter_track_grids[:,:,:,:2]  # Inherit the new XY
+    counter_soaked_track_grids[:,:,:,3] *= counter_track_grids[:,:,:,3]  # Intersection of visibility
+    
+    # Draw counter video
+    counter_drawn_video = draw_soaked_track_grid_gaussians(counter_soaked_track_grids, VH, VW, sigma=5)
+    
+    # Convert for display
+    counter_drawn_video_np = rp.as_rgb_images(rp.as_numpy_images(counter_drawn_video))
+    
+    # Create overlay
+    counter_drawn_video_alpha = counter_drawn_video[:,3:4,:,:]
+    counter_drawn_video_overlaid = (
+        1 - counter_drawn_video_alpha
+    ) * counter_video + counter_drawn_video_alpha * counter_drawn_video
+    
+    # Create preview video
+    preview_video = rp.vertically_concatenated_videos(
+        rp.as_numpy_videos([
+            video,
+            counter_drawn_video_np,
+            counter_drawn_video_overlaid,
+            counter_video,
+        ])
+    )
+    
+    return rp.as_easydict({
+        'video_track_grids': video_track_grids,
+        'counter_track_grids': counter_track_grids,
+        'soaked_track_grids': soaked_track_grids,
+        'counter_soaked_track_grids': counter_soaked_track_grids,
+        'drawn_video': drawn_video,
+        'counter_drawn_video': counter_drawn_video,
+        'counter_drawn_video_np': counter_drawn_video_np,
+        'counter_drawn_video_overlaid': counter_drawn_video_overlaid,
+        'preview_video': preview_video,
+    })
+
+def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_colors=None):
+    """
+    Draw colored gaussian blob videos for selected tracks.
+    
+    Args:
+        video: torch tensor [T, RGBA, VH, VW] - original video
+        counter_video: torch tensor [T, RGBA, VH, VW] - counterfactual video
+        video_tracks: torch tensor [T, N, XYZV] - original video tracks  
+        counter_tracks: torch tensor [T, N, XYZV] - counterfactual video tracks
+        blob_colors: list of [R,G,B,A] colors, defaults to 7 standard colors
+        
+    Returns:
+        easydict containing gaussian videos and overlay visualizations
+    """
+    if blob_colors is None:
+        blob_colors = [
+            [1.0, 0.0, 0.0, 1.0],  # red
+            [0.0, 1.0, 0.0, 1.0],  # green
+            [0.0, 0.0, 1.0, 1.0],  # blue
+            [1.0, 1.0, 1.0, 1.0],  # white
+            [0.0, 1.0, 1.0, 1.0],  # cyan
+            [1.0, 0.0, 1.0, 1.0],  # magenta
+            [1.0, 1.0, 0.0, 1.0],  # yellow
+        ]
+    
+    T, RGBA, VH, VW = video.shape
+    num_blobs = len(blob_colors)
+    
+    # Generate gaussian blob videos
+    video_gaussians, counter_video_gaussians = random_7_gaussians_video(
+        video_tracks, counter_tracks, VH, VW, sigma=16
+    )
+    
+    # Convert to numpy for display
+    video_gaussians_np = rp.as_numpy_images(video_gaussians)
+    counter_video_gaussians_np = rp.as_numpy_images(counter_video_gaussians)
+    
+    # Create overlays: replace video pixels with gaussian pixels wherever gaussians are not black
+    video_mask = (video_gaussians[:, :3, :, :] > 0).any(dim=1, keepdim=True)
+    counter_mask = (counter_video_gaussians[:, :3, :, :] > 0).any(dim=1, keepdim=True)
+    
+    video_mask = video_mask.expand(-1, 4, -1, -1)
+    counter_mask = counter_mask.expand(-1, 4, -1, -1)
+    
+    video_on_gaussians = torch.where(video_mask, video_gaussians, video)
+    counter_on_gaussians = torch.where(counter_mask, counter_video_gaussians, counter_video)
+    
+    # Convert overlays to numpy
+    video_on_gaussians_np = rp.as_numpy_images(video_on_gaussians)
+    counter_on_gaussians_np = rp.as_numpy_images(counter_on_gaussians)
+    
+    # Create side-by-side visualization
+    gaussian_preview = rp.horizontally_concatenated_videos([
+        counter_on_gaussians_np,
+        video_on_gaussians_np,
+    ])
+    
+    return rp.as_easydict({
+        'video_gaussians': video_gaussians,
+        'counter_video_gaussians': counter_video_gaussians,
+        'video_gaussians_np': video_gaussians_np,
+        'counter_video_gaussians_np': counter_video_gaussians_np,
+        'video_on_gaussians': video_on_gaussians,
+        'counter_on_gaussians': counter_on_gaussians,
+        'video_on_gaussians_np': video_on_gaussians_np,
+        'counter_on_gaussians_np': counter_on_gaussians_np,
+        'gaussian_preview': gaussian_preview,
+    })
+
 
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-7Cxuw5aZAY_405555963_425701967" #GOOD
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-D3HZiCsa_Q_781740353_789776475" #GOOD
@@ -333,93 +468,12 @@ T, N, VH, VW = rp.validate_tensor_shapes(
 
 
 
-#Upscale the tracks...
-THS = VH//16 #1 #Tracks height subdivided
-TWS = VW//16 #1 #Tracks width subdivided
-video_track_grids   = subdivide_track_grids(video_tracks  , THS, TWS)
-counter_track_grids = subdivide_track_grids(counter_tracks, THS, TWS)
+# Run video warp visualization
+warp_results = video_warp(video, counter_video, video_tracks, counter_tracks)
+rp.save_video_mp4(warp_results.preview_video, framerate=20)
+rp.display_image_slideshow(warp_results.preview_video)
 
-rp.validate_tensor_shapes(
-    counter_track_grids = "torch: T THS TWS XYZV",
-    video_track_grids   = "torch: T THS TWS XYZV",
-    XYZV=4,
-    **rp.gather_vars("T TWS TWS"),
-)
-
-
-
-
-soaked_track_grids = soak_track_grids(video_track_grids, video)
-# drawn_video = draw_soaked_track_grids(soaked_track_grids, VH, VW)
-drawn_video = draw_soaked_track_grid_gaussians(soaked_track_grids, VH, VW, sigma=5)
-
-counter_soaked_track_grids = soaked_track_grids + 0 #Inherit the colors
-soaked_track_grids[:,:,:,:2]=counter_track_grids[:,:,:,:2] #Inherit the new XY
-soaked_track_grids[:,:,:,3]*=counter_track_grids[:,:,:,3] #Intersection of visibility
-
-
-#soaked_track_grids[:,:,:,3]=1 #No invisiblity anywhere 
-
-#Draw a video from it
-# counter_drawn_video = draw_soaked_track_grids(soaked_track_grids, VH, VW)
-counter_drawn_video = draw_soaked_track_grid_gaussians(soaked_track_grids, VH, VW, sigma=5)
-
-counter_drawn_video_np = rp.as_numpy_images(counter_drawn_video)
-# counter_drawn_video_np =rp.with_alpha_checkerboards(counter_drawn_video_np)
-counter_drawn_video_np =rp.as_rgb_images(counter_drawn_video_np)
-
-###
-
-counter_drawn_video_alpha = counter_drawn_video[:,3:4,:,:]
-counter_drawn_video_overlaid = (
-    1 - counter_drawn_video_alpha
-) * counter_video + counter_drawn_video_alpha * counter_drawn_video
-
-preview_video = rp.vertically_concatenated_videos(
-    rp.as_numpy_videos(
-        [
-            video,
-            counter_drawn_video_np,
-            counter_drawn_video_overlaid,
-            counter_video,
-        ],
-    )
-)
-
-rp.save_video_mp4(preview_video,framerate=20)
-rp.display_image_slideshow(preview_video)
-
-# Test the new random 7 gaussians visualization
-video_gaussians, counter_video_gaussians = random_7_gaussians_video(
-    video_tracks, counter_tracks, VH, VW, sigma=16
-)
-
-# Convert to numpy for display
-video_gaussians_np = rp.as_numpy_images(video_gaussians)
-counter_video_gaussians_np = rp.as_numpy_images(counter_video_gaussians)
-
-# Create overlays: replace video pixels with gaussian pixels wherever gaussians are not black
-# Check if any RGB channel is non-zero (not exactly black)
-video_mask = (video_gaussians[:, :3, :, :] > 0).any(dim=1, keepdim=True)  # [T, 1, VH, VW]
-counter_mask = (counter_video_gaussians[:, :3, :, :] > 0).any(dim=1, keepdim=True)  # [T, 1, VH, VW]
-
-# Expand mask to all 4 channels (RGBA)
-video_mask = video_mask.expand(-1, 4, -1, -1)
-counter_mask = counter_mask.expand(-1, 4, -1, -1)
-
-# Replace video pixels with gaussian pixels where mask is True, otherwise keep video
-video_on_gaussians = torch.where(video_mask, video_gaussians, video)
-counter_on_gaussians = torch.where(counter_mask, counter_video_gaussians, counter_video)
-
-# Convert overlays to numpy
-video_on_gaussians_np = rp.as_numpy_images(video_on_gaussians)
-counter_on_gaussians_np = rp.as_numpy_images(counter_on_gaussians)
-
-# Create side-by-side visualization: [counter_on_gaussians | video_on_gaussians]
-gaussian_preview = rp.horizontally_concatenated_videos([
-    counter_on_gaussians_np,
-    video_on_gaussians_np,
-])
-
-rp.save_video_mp4(gaussian_preview, "gaussian_tracks_visualization.mp4", framerate=20)
-rp.display_image_slideshow(gaussian_preview)
+# Run blob visualization
+blob_results = draw_blobs_videos(video, counter_video, video_tracks, counter_tracks)
+rp.save_video_mp4(blob_results.gaussian_preview, "gaussian_tracks_visualization.mp4", framerate=20)
+rp.display_image_slideshow(blob_results.gaussian_preview)
