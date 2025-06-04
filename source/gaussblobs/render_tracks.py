@@ -416,11 +416,27 @@ def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_c
     Returns:
         easydict containing gaussian videos and optionally overlay visualizations
     """
-    # Generate gaussian blob videos first to determine channel count
+    #Input validation
+    rp.validate_tensor_shapes(
+        video          = "torch: T C VH VW",
+        counter_video  = "torch: T C VH VW",
+        video_tracks   = "torch: T N XYZV ",
+        counter_tracks = "torch: T N XYZV ",
+        XYZV=4,
+    )
+
+    #Draw the blobs
     video_gaussians, counter_video_gaussians = random_7_gaussians_video(
         video_tracks, counter_tracks, video.shape[2], video.shape[3], sigma=sigma, blob_colors=blob_colors
     )
 
+    #Output Validation
+    rp.validate_tensor_shapes(
+        video_gaussians         = "torch: T C VH VW",
+        counter_video_gaussians = "torch: T C VH VW",
+    )
+
+    #Return values fast
     if not visualize:
         # Return minimal output for performance
         return rp.gather_vars(
@@ -428,6 +444,7 @@ def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_c
             "counter_video_gaussians",
         )
 
+    #If visualize, take our time
     T, C, VH, VW = video_gaussians.shape
 
     # Optimize tensor resizing - avoid crop_tensor overhead by doing direct operations
