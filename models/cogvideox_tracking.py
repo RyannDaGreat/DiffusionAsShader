@@ -501,7 +501,7 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
         self.second_patch_embed = CogVideoXPatchEmbed(
             patch_size=patch_size,
             patch_size_t=None, #GUESSWORK
-            in_channels=in_channels * 3, #THREE: For all 3 control videos: tracking, counter_tracking and counter_video
+            in_channels=in_channels * 4, #FOUR: For all 4 control videos: tracking, counter_tracking, counter_video, counter_tracks_reverse
             embed_dim=inner_dim,
             text_embed_dim=text_embed_dim,
             bias=True, #GUESSWORK
@@ -543,6 +543,7 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
         tracking_maps: torch.Tensor,         # BTCHW
         counter_tracking_maps: torch.Tensor, # BTCHW
         counter_video_maps: torch.Tensor,    # BTCHW
+        counter_tracks_reverse: torch.Tensor, # BTCHW
 
         timestep: Union[int, float, torch.LongTensor],
         timestep_cond: Optional[torch.Tensor] = None,
@@ -560,6 +561,7 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
                 tracking_maps,
                 counter_tracking_maps,
                 counter_video_maps,
+                counter_tracks_reverse,
             ],
             dim=2,
         )
@@ -567,17 +569,19 @@ class CogVideoXTransformer3DModelTracking(CogVideoXTransformer3DModel, ModelMixi
 
         rp.validate_tensor_shapes(
             hidden_states         = "B T C H W",
+            hidden_states          = "B T C H W",
             #
             tracking_maps         = "B T C H W",
             counter_tracking_maps = "B T C H W",
             counter_video_maps    = "B T C H W",
+            counter_tracks_reverse = "B T C H W",
             #
-            control_maps          = "B T CCC H W",
+            control_maps           = "B T CCCC H W",
             #
             encoder_hidden_states = "B Seq Dim",
             #
             C=32,
-            CCC=32*3,
+            CCCC=32*4,
             #
             verbose=False,
             # verbose='bold altbw white random blue',
@@ -998,6 +1002,8 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
         counter_tracking_image: torch.Tensor=None,
         counter_video_maps: torch.Tensor=None,
         counter_video_image: torch.Tensor=None,
+        counter_tracks_reverse: torch.Tensor=None,
+        counter_tracks_reverse_image: torch.Tensor=None,
         use_image_conditioning = True,
         latent_conditioning_dropout = [1,1,1,1,1,1,1,1,1,1,1,1,1],
     ) -> Union[CogVideoXPipelineOutput, Tuple]:
@@ -1010,6 +1016,8 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
         assert counter_tracking_image is not None
         assert counter_video_maps is not None
         assert counter_video_image is not None
+        assert counter_tracks_reverse is not None
+        assert counter_tracks_reverse_image is not None
         assert len(latent_conditioning_dropout) == 13
 
 
@@ -1069,6 +1077,7 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
         tracking_image         = self.video_processor.preprocess(tracking_image        , height=height, width=width).to(device, dtype=prompt_embeds.dtype)
         counter_tracking_image = self.video_processor.preprocess(counter_tracking_image, height=height, width=width).to(device, dtype=prompt_embeds.dtype)
         counter_video_image    = self.video_processor.preprocess(counter_video_image   , height=height, width=width).to(device, dtype=prompt_embeds.dtype)
+        counter_tracks_reverse_image = self.video_processor.preprocess(counter_tracks_reverse_image, height=height, width=width).to(device, dtype=prompt_embeds.dtype)
 
         if not use_image_conditioning:
             image = image * 0
@@ -1133,6 +1142,21 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
             generator,
             latents=None,
         )
+        
+        # 4. Process counter tracks reverse maps
+        # Get latents for counter tracks reverse first frame
+        _, counter_tracks_reverse_image_latents = self.prepare_latents(
+            counter_tracks_reverse_image,
+            batch_size * num_videos_per_prompt,
+            latent_channels,
+            num_frames,
+            height,
+            width,
+            prompt_embeds.dtype,
+            device,
+            generator,
+            latents=None,
+        )
 
         for frame_number, keep in enumerate(latent_conditioning_dropout):
             if not keep:
@@ -1186,6 +1210,10 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
                 counter_video_maps_input = torch.cat([counter_video_maps] * 2) if do_classifier_free_guidance else counter_video_maps
                 counter_video_maps_input = torch.cat([counter_video_maps_input, latents_counter_video_image], dim=2)
 
+                latents_counter_tracks_reverse_image = torch.cat([counter_tracks_reverse_image_latents] * 2) if do_classifier_free_guidance else counter_tracks_reverse_image_latents
+                counter_tracks_reverse_input = torch.cat([counter_tracks_reverse] * 2) if do_classifier_free_guidance else counter_tracks_reverse
+                counter_tracks_reverse_input = torch.cat([counter_tracks_reverse_input, latents_counter_tracks_reverse_image], dim=2)
+
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
 
@@ -1200,6 +1228,7 @@ class CogVideoXImageToVideoPipelineTracking(CogVideoXImageToVideoPipeline, Diffu
                     tracking_maps=tracking_maps_input,
                     counter_tracking_maps=counter_tracking_maps_input,
                     counter_video_maps=counter_video_maps_input,
+                    counter_tracks_reverse=counter_tracks_reverse_input,
                     return_dict=False,
                 )[0]
                 

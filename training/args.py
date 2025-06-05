@@ -70,6 +70,10 @@ def _get_dataset_args(parser: argparse.ArgumentParser) -> None:
         type=str,
     )
     parser.add_argument(
+        "--counter_tracks_reverse_column",
+        type=str,
+    )
+    parser.add_argument(
         "--tracking_map_path",
         type=str,
         default=None,
@@ -81,6 +85,10 @@ def _get_dataset_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--counter_video_map_path",
+        type=str,
+    )
+    parser.add_argument(
+        "--counter_tracks_reverse_map_path",
         type=str,
     )
     parser.add_argument(

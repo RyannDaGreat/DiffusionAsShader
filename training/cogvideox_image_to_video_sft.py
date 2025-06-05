@@ -149,6 +149,9 @@ class CollateFunctionImageTracking:
 
         counter_video_maps = [x["counter_video_map"] for x in data]
         counter_video_maps = torch.stack(counter_video_maps).to(dtype=self.weight_dtype, non_blocking=True)
+        
+        counter_tracks_reverse_maps = [x["counter_tracks_reverse_map"] for x in data]
+        counter_tracks_reverse_maps = torch.stack(counter_tracks_reverse_maps).to(dtype=self.weight_dtype, non_blocking=True)
 
         return {
             "images": images,
@@ -157,6 +160,7 @@ class CollateFunctionImageTracking:
             "tracking_maps": tracking_maps,
             "counter_tracking_maps" : counter_tracking_maps,
             "counter_video_maps" : counter_video_maps,
+            "counter_tracks_reverse_maps" : counter_tracks_reverse_maps,
         }
 
 def main(args):
@@ -785,6 +789,16 @@ def main(args):
 
                         counter_video_image = counter_video_image.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
                         counter_video_image_latent_dist = cached_vae_encode(counter_video_image)
+                        
+                    if args.counter_tracks_reverse_column is not None:
+                        counter_tracks_reverse_maps = batch["counter_tracks_reverse_maps"].to(accelerator.device, non_blocking=True)
+                        counter_tracks_reverse_image = counter_tracks_reverse_maps[:,:1].clone()
+                        
+                        counter_tracks_reverse_maps = counter_tracks_reverse_maps.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
+                        counter_tracks_reverse_latent_dist = cached_vae_encode(counter_tracks_reverse_maps)
+
+                        counter_tracks_reverse_image = counter_tracks_reverse_image.permute(0, 2, 1, 3, 4)  # [B, C, F, H, W]
+                        counter_tracks_reverse_image_latent_dist = cached_vae_encode(counter_tracks_reverse_image)
 
                 else:
                     assert False
@@ -807,6 +821,7 @@ def main(args):
                 tracking_maps         = get_latents_from_dist(tracking_latent_dist        )
                 counter_tracking_maps = get_latents_from_dist(counter_tracking_latent_dist)
                 counter_video_maps    = get_latents_from_dist(counter_video_latent_dist   )
+                counter_tracks_reverse_maps = get_latents_from_dist(counter_tracks_reverse_latent_dist)
                 
                 padding_shape = (video_latents.shape[0], video_latents.shape[1] - 1, *video_latents.shape[2:])
 
@@ -814,12 +829,14 @@ def main(args):
                 tracking_image_latents         = get_image_latents_from_dist(tracking_image_latent_dist        , padding_shape)
                 counter_tracking_image_latents = get_image_latents_from_dist(counter_tracking_image_latent_dist, padding_shape)
                 counter_video_image_latents    = get_image_latents_from_dist(counter_video_image_latent_dist   , padding_shape)
+                counter_tracks_reverse_image_latents = get_image_latents_from_dist(counter_tracks_reverse_image_latent_dist, padding_shape)
 
                 if random.random() < args.noised_image_dropout:
                     image_latents                  = torch.zeros_like(image_latents)
                     tracking_image_latents         = torch.zeros_like(tracking_image_latents)
                     counter_tracking_image_latents = torch.zeros_like(counter_tracking_image_latents)
                     counter_video_image_latents    = torch.zeros_like(counter_video_image_latents)
+                    counter_tracks_reverse_image_latents = torch.zeros_like(counter_tracks_reverse_image_latents)
 
 
                 DO_TEMPORAL_DROPOUT=True #TODO: Make this an arg
@@ -893,6 +910,7 @@ def main(args):
                 tracking_latents         = torch.cat([tracking_maps        , tracking_image_latents        ], dim=2)
                 counter_tracking_latents = torch.cat([counter_tracking_maps, counter_tracking_image_latents], dim=2)
                 counter_video_latents    = torch.cat([counter_video_maps   , counter_video_image_latents   ], dim=2)
+                counter_tracks_reverse_latents = torch.cat([counter_tracks_reverse_maps, counter_tracks_reverse_image_latents], dim=2)
 
                 if args.tracking_column is None:
                     assert False, args
@@ -911,6 +929,7 @@ def main(args):
                         tracking_maps=tracking_latents,
                         counter_tracking_maps=counter_tracking_latents,
                         counter_video_maps=counter_video_latents,
+                        counter_tracks_reverse_maps=counter_tracks_reverse_latents,
 
                         timestep=timesteps,
                         image_rotary_emb=image_rotary_emb,
