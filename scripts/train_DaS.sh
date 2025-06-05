@@ -17,6 +17,28 @@ rm -rf $TRAIN_FROM_DIR/transformer
 cp -al $INIT_CHECKPOINT_PATH/transformer $TRAIN_FROM_DIR/transformer
 
 bash scripts/train_DaS.sh
+
+
+
+
+
+TO SYNC CHECKPOINTS:
+
+while True:
+    sys.path.append('/home/jupyter/CleanCode/Management')
+    import syncutil
+    most_recent_checkpoint = get_all_folders(get_all_folders('/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path',sort_by='date')[-1],sort_by='date')[-1]
+    string_to_clipboard(most_recent_checkpoint)
+    syncutil.sync_checkpoint_folder(most_recent_checkpoint)
+    print(fansi_highlight_path(most_recent_checkpoint))
+    sleep(60*5)
+
+
+TO RUN TESTS:
+    tmux setw synchronize-panes
+    PYM source.run_pipeline
+
+
 '
 
 ##########################
