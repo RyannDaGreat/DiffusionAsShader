@@ -254,7 +254,7 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42,
         VH, VW: output video height and width
         sigma: gaussian blob size
         seed: random seed for reproducible track selection
-        blob_colors: list of color tensors, defaults to 7 RGBA colors
+        blob_colors: list of color tensors, defaults to 7 RGBA colors. It also supports some special strings, like 'random_of_7'
 
     Returns:
         tuple of (video_gaussians, counter_video_gaussians) - both [T, C, VH, VW] where C is determined by color channels
@@ -262,16 +262,20 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42,
     T, N, XYZV = tracks.shape
 
     # Set default colors if none provided
+    default_blob_colors = [
+        [1, 0, 0, 1],  # red
+        [0, 1, 0, 1],  # green
+        [0, 0, 1, 1],  # blue
+        [0, 1, 1, 1],  # cyan
+        [1, 0, 1, 1],  # magenta
+        [1, 1, 0, 1],  # yellow
+        [1, 1, 1, 1],  # white
+    ]
     if blob_colors is None:
-        blob_colors = [
-            [1, 0, 0, 1],  # red
-            [0, 1, 0, 1],  # green
-            [0, 0, 1, 1],  # blue
-            [0, 1, 1, 1],  # cyan
-            [1, 0, 1, 1],  # magenta
-            [1, 1, 0, 1],  # yellow
-            [1, 1, 1, 1],  # white
-        ]
+        blob_colors = default_blob_colors
+    if blob_colors is 'random_of_7':
+        num_colors = rp.random_int(1,7)
+        blob_colors = rp.random_batch(default_blob_colors, num_colors)
 
     # Convert to tensor and get dimensions
     colors = torch.tensor(blob_colors, dtype=tracks.dtype)
