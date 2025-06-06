@@ -12,6 +12,8 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from torchvision.transforms.functional import resize
 
+from einops import rearrange
+
 import sys
 from icecream import ic
 import rp
@@ -374,25 +376,34 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             counter_video_frames_resized = torch.stack([resize(counter_video_frame, nearest_res) for counter_video_frame in counter_video_frames], dim=0)
             counter_video_frames = torch.stack([self.video_transforms(counter_video_frame) for counter_video_frame in counter_video_frames_resized], dim=0)
 
-            #HERE, I'M GOING TO LOAD MORE THINGS:
+            #All in range [-1, 1]
+            T,VC,VH,VW = rp.validate_tensor_shapes(
+                frames                  = "torch: T VC VH VW",
+                tracking_frames         = "torch: T VC VH VW",
+                counter_video_frames    = "torch: T VC VH VW",
+                counter_tracking_frames = "torch: T VC VH VW",
+                return_dims = "T VC VH VW",
+                VC=3,
+            )
 
+            #HERE, I'M GOING TO LOAD MORE THINGS:
             #LOAD TRACKS (These should be in all samples)
             sample_root = rp.get_parent_folder(path)
             #
             tracks_path         = rp.path_join(sample_root, 'video.mp4__DiffusionAsShaderCondition/video_tracks_spatracker.pt')
             counter_tracks_path = rp.path_join(sample_root, 'firstLastInterp_Jack2000.mp4__DiffusionAsShaderCondition/firstLastInterp_Jack2000_tracks_spatracker.pt')
             #
-            video_tracks   = rp.as_easydict(torch.load(tracks_path        , map_location="cpu"))
-            counter_tracks = rp.as_easydict(torch.load(counter_tracks_path, map_location="cpu"))
-            video_tracks   = torch.concat([video_tracks  .tracks, video_tracks  .visibility[:,:,None]],2)
-            counter_tracks = torch.concat([counter_tracks.tracks, counter_tracks.visibility[:,:,None]],2)
+            video_tracks         = rp.as_easydict(torch.load(tracks_path        , map_location="cpu"))
+            counter_video_tracks = rp.as_easydict(torch.load(counter_tracks_path, map_location="cpu"))
+            video_tracks         = torch.concat([video_tracks.tracks        , video_tracks.visibility        [:,:,None]],2)
+            counter_video_tracks = torch.concat([counter_video_tracks.tracks, counter_video_tracks.visibility[:,:,None]],2)
             #
             rp.validate_tensor_shapes(
-                video_tracks   = "torch: T N XYZV",
-                counter_tracks = "torch: T N XYZV",
+                video_tracks         = "torch: T N XYZV",
+                counter_video_tracks = "torch: T N XYZV",
+                T=T, XYZV=4,
             )
-            #
-            
+
 
 
             #Only 3 variants for each video please! Easier to cache!
@@ -486,19 +497,49 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             #Random Sliding Crops
             if rp.random_chance(.2):
                 rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
-                videos, tracks = augment_videos([frames, tracking_frames], [video_tracks])
-                frames, tracking_frames = videos
-                video_tracks, = tracks
+                [frames, tracking_frames], [video_tracks] = augment_videos([frames, tracking_frames], [video_tracks])
                 audit_metadata+=['AUG-GT']
             if rp.random_chance(.2):
                 rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
-                videos, tracks = augment_videos([counter_video_frames, counter_tracking_frames], [counter_tracks])
-                counter_video_frames, counter_tracking_frames = videos
-                counter_tracks, = tracks
+                [counter_video_frames, counter_tracking_frames], [counter_video_tracks] = augment_videos([counter_video_frames, counter_tracking_frames], [counter_video_tracks])
                 audit_metadata+=['AUG-CTR']
 
+            #Make the gaussian blobs videos
+            from source.gaussblobs.render_tracks import draw_blobs_videos
+            blobs_video, counter_blobs_video = draw_blobs_videos(
+                frames,
+                counter_video_frames,
+                video_tracks,
+                counter_video_tracks,
+                blob_colors='random_of_7',
+                sigma=10,
+            )
+            #Normalize to from [0,1] -> [-1,1]
+            blobs_video         = blobs_video         * 2 - 1
+            counter_blobs_video = counter_blobs_video * 2 - 1
+
+            ##################################################################################################  
+            ##################################################################################################  
+            ##################################################################################################  
+            #  _____  _                   _   _               _                   ____                _   ####  
+            # |_   _|| |__    ___        | | | |  __ _   ___ | | __ _   _        |  _ \   __ _  _ __ | |_ ####  
+            #   | |  | '_ \  / _ \       | |_| | / _` | / __|| |/ /| | | |       | |_) | / _` || '__|| __|####  
+            #   | |  | | | ||  __/       |  _  || (_| || (__ |   < | |_| |       |  __/ | (_| || |   | |_ ####  
+            #   |_|  |_| |_| \___|       |_| |_| \__,_| \___||_|\_\ \__, |       |_|     \__,_||_|    \__|####  
+            #                                                       |___/                                 ####  
+            ##################################################################################################  
+            ##################################################################################################  
+            ##################################################################################################  
+            #Turn the counter videos into gauss blob videos!!!
+            rp.fansi_print(
+                "BLOBBITY BLOBBERINO! WE'RE SWAPPING TRACKS FOR BLOBS BABE!!!",
+                "green blue cyan on bold underlined italic  brown",
+            )
+            counter_tracking_frames = counter_blobs_video
+            tracking_frames = blobs_video
+            
             # if rp.random_chance(1/200):
-            if rp.random_chance(1/50):
+            if rp.random_chance(1/10):
                 try:
                     dataset_audit_path = f".random_dataset_samples/sample_{rp.random_int(100)}.pkl" #Don't save a total of more than 100 samples so we have no disk leaks
                     dataset_audit_path = rp.get_absolute_path(dataset_audit_path)
