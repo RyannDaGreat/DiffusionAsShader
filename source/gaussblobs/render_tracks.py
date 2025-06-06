@@ -273,7 +273,7 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42,
     ]
     if blob_colors is None:
         blob_colors = default_blob_colors
-    if blob_colors is 'random_of_7':
+    if blob_colors == 'random_of_7':
         num_colors = rp.random_int(1,7)
         blob_colors = rp.random_batch(default_blob_colors, num_colors)
 
