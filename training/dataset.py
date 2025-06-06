@@ -316,11 +316,13 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         self.counter_tracking_column = kwargs.pop("counter_tracking_column", None)
         self.counter_video_column    = kwargs.pop("counter_video_column"   , None)
         self.counter_tracks_reverse_column = kwargs.pop("counter_tracks_reverse_column", None)
+        self.reverse_tracks_column = kwargs.pop("reverse_tracks_column", None)
 
         assert self.tracking_column         is not None
         assert self.counter_tracking_column is not None
         assert self.counter_video_column    is not None
         assert self.counter_tracks_reverse_column is not None
+        assert self.reverse_tracks_column is not None
 
         super().__init__(*args, **kwargs)
 
@@ -331,6 +333,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         counter_tracking_path: Path,
         counter_video_path: Path,
         counter_tracks_reverse_path: Path,
+        reverse_tracks_path: Path,
     ) -> torch.Tensor:
         if self.load_tensors:
             return self._load_preprocessed_latents_and_embeds(path, tracking_path)
@@ -383,11 +386,18 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             counter_tracks_reverse_frames = counter_tracks_reverse_frames.permute(0, 3, 1, 2).contiguous()
             counter_tracks_reverse_frames_resized = torch.stack([resize(counter_tracks_reverse_frame, nearest_res) for counter_tracks_reverse_frame in counter_tracks_reverse_frames], dim=0)
             counter_tracks_reverse_frames = torch.stack([self.video_transforms(counter_tracks_reverse_frame) for counter_tracks_reverse_frame in counter_tracks_reverse_frames_resized], dim=0)
+            
+            reverse_tracks_reader = decord.VideoReader(uri=reverse_tracks_path.as_posix())
+            reverse_tracks_frames = reverse_tracks_reader.get_batch(frame_indices)
+            reverse_tracks_frames = reverse_tracks_frames[:nearest_frame_bucket].float()
+            reverse_tracks_frames = reverse_tracks_frames.permute(0, 3, 1, 2).contiguous()
+            reverse_tracks_frames_resized = torch.stack([resize(reverse_tracks_frame, nearest_res) for reverse_tracks_frame in reverse_tracks_frames], dim=0)
+            reverse_tracks_frames = torch.stack([self.video_transforms(reverse_tracks_frame) for reverse_tracks_frame in reverse_tracks_frames_resized], dim=0)
 
             #Only 4 variants for each video please! Easier to cache!
             rp.seed_all(rp.millis()%3 + rp.get_sha256_hash(str(path).encode(),format='int')%10000)
 
-            assert len(frames)==len(tracking_frames)==len(counter_video_frames)==len(counter_tracking_frames)==len(counter_tracks_reverse_frames),f'NOT ALL LENGTHS ARE EQUAL: len(frames)={len(frames)} AND len(tracking_frames)={len(tracking_frames)} AND len(counter_video_frames)={len(counter_video_frames)} AND len(counter_tracking_frames)={len(counter_tracking_frames)} AND len(counter_tracks_reverse_frames)={len(counter_tracks_reverse_frames)}'
+            assert len(frames)==len(tracking_frames)==len(counter_video_frames)==len(counter_tracking_frames)==len(counter_tracks_reverse_frames)==len(reverse_tracks_frames),f'NOT ALL LENGTHS ARE EQUAL: len(frames)={len(frames)} AND len(tracking_frames)={len(tracking_frames)} AND len(counter_video_frames)={len(counter_video_frames)} AND len(counter_tracking_frames)={len(counter_tracking_frames)} AND len(counter_tracks_reverse_frames)={len(counter_tracks_reverse_frames)} AND len(reverse_tracks_frames)={len(reverse_tracks_frames)}'
 
 
             #VIDEO SPEED AUGMENTATION. IT'S CRUDE RIGHT NOW. BUT I NEED TO PROVE IT UNDERSTANDS FIRST/LAST FRAME IS NOT ALL THERE IS...
@@ -450,6 +460,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             original_counter_video_frames    = counter_video_frames
             original_counter_tracking_frames = counter_tracking_frames
             original_counter_tracks_reverse_frames = counter_tracks_reverse_frames
+            original_reverse_tracks_frames = reverse_tracks_frames
 
 
             frames          = VIDEO_SPEED(frames)
@@ -458,6 +469,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             counter_video_frames    = COUNTER_SPEED(counter_video_frames)
             counter_tracking_frames = COUNTER_SPEED(counter_tracking_frames)
             counter_tracks_reverse_frames = COUNTER_SPEED(counter_tracks_reverse_frames)
+            reverse_tracks_frames = COUNTER_SPEED(reverse_tracks_frames)
 
             assert len(frames)==len(tracking_frames)==len(counter_video_frames)==len(counter_tracking_frames),f'NOT ALL LENGTHS ARE EQUAL: len(frames)={len(frames)} AND len(tracking_frames)={len(tracking_frames)} AND len(counter_video_frames)={len(counter_video_frames)} AND len(counter_tracking_frames)={len(counter_tracking_frames)}'
 
@@ -472,6 +484,8 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                 rp.fansi_print(f"dataset.py: REVERSING COUNTERFACTUALS", "white blue on black gray italic")
                 counter_video_frames    = counter_video_frames   .flip(0)
                 counter_tracking_frames = counter_tracking_frames.flip(0)
+                counter_tracks_reverse_frames = counter_tracks_reverse_frames.flip(0)
+                reverse_tracks_frames = reverse_tracks_frames.flip(0)
                 audit_metadata+=['REV-CTR']
 
             #Random Sliding Crops
@@ -481,7 +495,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                 audit_metadata+=['AUG-GT']
             if rp.random_chance(.2):
                 rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
-                counter_video_frames, counter_tracking_frames = augment_videos([counter_video_frames, counter_tracking_frames])
+                counter_video_frames, counter_tracking_frames, counter_tracks_reverse_frames, reverse_tracks_frames = augment_videos([counter_video_frames, counter_tracking_frames, counter_tracks_reverse_frames, reverse_tracks_frames])
                 audit_metadata+=['AUG-CTR']
 
             # if rp.random_chance(1/200):
@@ -490,14 +504,14 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                     dataset_audit_path = f".random_dataset_samples/sample_{rp.random_int(100)}.pkl" #Don't save a total of more than 100 samples so we have no disk leaks
                     dataset_audit_path = rp.get_absolute_path(dataset_audit_path)
                     rp.fansi_print(f"SAVING RANDOM DATASET SAMPLE TO {dataset_audit_path}", "green red white bold underdouble")
-                    sample = image, frames, tracking_frames, counter_tracking_frames, counter_video_frames
+                    sample = image, frames, tracking_frames, counter_tracking_frames, counter_video_frames, counter_tracks_reverse_frames, reverse_tracks_frames
                     rp.object_to_file(sample, dataset_audit_path)
 
                     audit_videos=[rp.as_numpy_video(x/2+.5) for x in sample]
-                    audit_videos=rp.labeled_videos(audit_videos,'Image Frames Tracks CounterTracks CounterFrames'.split())
+                    audit_videos=rp.labeled_videos(audit_videos,'Image Frames Tracks CounterTracks CounterFrames CounterTracksReverse ReverseTrack'.split())
                     audit_videos=rp.horizontally_concatenated_videos(audit_videos)
                     orig_videos = rp.horizontally_concatenated_videos(
-                        [rp.as_numpy_video(x/2+.5) for x in [original_frames*0, original_frames, original_tracking_frames, original_counter_tracking_frames, original_counter_video_frames]]
+                        [rp.as_numpy_video(x/2+.5) for x in [original_frames*0, original_frames, original_tracking_frames, original_counter_tracking_frames, original_counter_video_frames, original_counter_tracks_reverse_frames, original_reverse_tracks_frames]]
                     )
                     audit_videos=rp.labeled_images(audit_videos,"  :  ".join(audit_metadata))
                     
@@ -506,7 +520,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                 except Exception:
                     rp.print_stack_trace()
             
-            return image, frames, tracking_frames, counter_tracking_frames, counter_video_frames, None
+            return image, frames, tracking_frames, counter_tracking_frames, counter_video_frames, counter_tracks_reverse_frames, reverse_tracks_frames, None
 
     def _find_nearest_resolution(self, height, width):
         nearest_res = min(self.resolutions, key=lambda x: abs(x[1] - height) + abs(x[2] - width))
@@ -522,6 +536,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         counter_tracking_path = self.data_root.joinpath(self.counter_tracking_column)
         counter_video_path = self.data_root.joinpath(self.counter_video_column)
         counter_tracks_reverse_path = self.data_root.joinpath(self.counter_tracks_reverse_column)
+        reverse_tracks_path = self.data_root.joinpath(self.reverse_tracks_column)
 
         if not prompt_path.exists() or not prompt_path.is_file():
             raise ValueError(
@@ -547,6 +562,10 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             raise ValueError(
                 f"Expected `--counter_tracks_reverse_column` to be path to a file in `--data_root` containing line-separated counter_tracks_reverse information. counter_tracks_reverse_path={counter_tracks_reverse_path}"
             )
+        if not reverse_tracks_path.exists() or not reverse_tracks_path.is_file():
+            raise ValueError(
+                f"Expected `--reverse_tracks_column` to be path to a file in `--data_root` containing line-separated reverse_tracks information. reverse_tracks_path={reverse_tracks_path}"
+            )
 
         with open(prompt_path, "r", encoding="utf-8") as file:
             prompts = [line.strip() for line in file.readlines() if len(line.strip()) > 0]
@@ -561,6 +580,8 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             counter_video_paths = [self.data_root.joinpath(line.strip()) for line in file.readlines() if len(line.strip()) > 0]
         with open(counter_tracks_reverse_path, "r", encoding="utf-8") as file:
             counter_tracks_reverse_paths = [self.data_root.joinpath(line.strip()) for line in file.readlines() if len(line.strip()) > 0]
+        with open(reverse_tracks_path, "r", encoding="utf-8") as file:
+            reverse_tracks_paths = [self.data_root.joinpath(line.strip()) for line in file.readlines() if len(line.strip()) > 0]
 
         if not self.load_tensors and any(not path.is_file() for path in video_paths):
             raise ValueError(
@@ -571,6 +592,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         self.counter_tracking_paths = counter_tracking_paths
         self.counter_video_paths = counter_video_paths
         self.counter_tracks_reverse_paths = counter_tracks_reverse_paths
+        self.reverse_tracks_paths = reverse_tracks_paths
         return prompts, video_paths
 
     def _load_dataset_from_csv(self) -> Tuple[List[str], List[str], List[str]]:
@@ -581,11 +603,13 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         counter_tracking_paths = df[self.counter_tracking_column].tolist()
         counter_video_paths = df[self.counter_video_column].tolist()
         counter_tracks_reverse_paths = df[self.counter_tracks_reverse_column].tolist()
+        reverse_tracks_paths = df[self.reverse_tracks_column].tolist()
         video_paths = [self.data_root.joinpath(line.strip()) for line in video_paths]
         tracking_paths = [self.data_root.joinpath(line.strip()) for line in tracking_paths]
         counter_tracking_paths = [self.data_root.joinpath(line.strip()) for line in counter_tracking_paths]
         counter_video_paths = [self.data_root.joinpath(line.strip()) for line in counter_video_paths]
         counter_tracks_reverse_paths = [self.data_root.joinpath(line.strip()) for line in counter_tracks_reverse_paths]
+        reverse_tracks_paths = [self.data_root.joinpath(line.strip()) for line in reverse_tracks_paths]
 
         if any(not path.is_file() for path in video_paths):
             raise ValueError(
@@ -596,6 +620,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         self.counter_tracking_paths = counter_tracking_paths
         self.counter_video_paths = counter_video_paths
         self.counter_tracks_reverse_paths = counter_tracks_reverse_paths
+        self.reverse_tracks_paths = reverse_tracks_paths
         return prompts, video_paths
     
     def __getitem__(self, index: int) -> Dict[str, Any]:
@@ -631,12 +656,13 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                     #     },
                     # }
                 else:
-                    image, video, tracking_map, counter_tracking_map, counter_video_map, counter_tracks_reverse_map, _ = self._preprocess_video(
+                    image, video, tracking_map, counter_tracking_map, counter_video_map, counter_tracks_reverse_map, reverse_tracks_map, _ = self._preprocess_video(
                         self.video_paths[index],
                         self.tracking_paths[index],
                         self.counter_tracking_paths[index],
                         self.counter_video_paths[index],
                         self.counter_tracks_reverse_paths[index],
+                        self.reverse_tracks_paths[index],
                     )
                     rp.fansi_print(f'Good sample at index={index}','green green italic bold')
                     return {
@@ -647,6 +673,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                         "counter_tracking_map": counter_tracking_map,
                         "counter_video_map": counter_video_map,
                         "counter_tracks_reverse_map": counter_tracks_reverse_map,
+                        "reverse_tracks_map": reverse_tracks_map,
                         "video_metadata": {
                             "num_frames": video.shape[0],
                             "height": video.shape[2],
@@ -659,7 +686,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                 index=rp.random_index(self)
             
     
-    def _load_preprocessed_latents_and_embeds(self, path: Path, tracking_path: Path, counter_tracking_path: Path, counter_video_path: Path, counter_tracks_reverse_path: Path) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _load_preprocessed_latents_and_embeds(self, path: Path, tracking_path: Path, counter_tracking_path: Path, counter_video_path: Path, counter_tracks_reverse_path: Path, reverse_tracks_path: Path) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         rp.fansi_print(f"WHY THE FUCK ARE WE HERE??? path={path} tracking_path={tracking_path}",'bold green green on red red')
         assert False, "WHY TTGE FUCK"
 
