@@ -374,6 +374,27 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             counter_video_frames_resized = torch.stack([resize(counter_video_frame, nearest_res) for counter_video_frame in counter_video_frames], dim=0)
             counter_video_frames = torch.stack([self.video_transforms(counter_video_frame) for counter_video_frame in counter_video_frames_resized], dim=0)
 
+            #HERE, I'M GOING TO LOAD MORE THINGS:
+
+            #LOAD TRACKS (These should be in all samples)
+            sample_root = rp.get_parent_folder(path)
+            #
+            tracks_path         = rp.path_join(sample_root, 'video.mp4__DiffusionAsShaderCondition/video_tracks_spatracker.pt')
+            counter_tracks_path = rp.path_join(sample_root, 'firstLastInterp_Jack2000.mp4__DiffusionAsShaderCondition/firstLastInterp_Jack2000_tracks_spatracker.pt')
+            #
+            video_tracks   = rp.as_easydict(torch.load(tracks_path        , map_location="cpu"))
+            counter_tracks = rp.as_easydict(torch.load(counter_tracks_path, map_location="cpu"))
+            video_tracks   = torch.concat([video_tracks  .tracks, video_tracks  .visibility[:,:,None]],2)
+            counter_tracks = torch.concat([counter_tracks.tracks, counter_tracks.visibility[:,:,None]],2)
+            #
+            rp.validate_tensor_shapes(
+                video_tracks   = "torch: T N XYZV",
+                counter_tracks = "torch: T N XYZV",
+            )
+            #
+            
+
+
             #Only 3 variants for each video please! Easier to cache!
             rp.seed_all(rp.millis()%3 + rp.get_sha256_hash(str(path).encode(),format='int')%10000)
 
@@ -465,15 +486,19 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             #Random Sliding Crops
             if rp.random_chance(.2):
                 rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
-                frames, tracking_frames = augment_videos([frames, tracking_frames])
+                videos, tracks = augment_videos([frames, tracking_frames], [video_tracks])
+                frames, tracking_frames = videos
+                video_tracks, = tracks
                 audit_metadata+=['AUG-GT']
             if rp.random_chance(.2):
                 rp.fansi_print(f'RANDOM SLIDING CROP: frames.shape={frames.shape}  tracking_frames={tracking_frames.shape}','green green yellow')
-                counter_video_frames, counter_tracking_frames = augment_videos([counter_video_frames, counter_tracking_frames])
+                videos, tracks = augment_videos([counter_video_frames, counter_tracking_frames], [counter_tracks])
+                counter_video_frames, counter_tracking_frames = videos
+                counter_tracks, = tracks
                 audit_metadata+=['AUG-CTR']
 
             # if rp.random_chance(1/200):
-            if rp.random_chance(1/200):
+            if rp.random_chance(1/50):
                 try:
                     dataset_audit_path = f".random_dataset_samples/sample_{rp.random_int(100)}.pkl" #Don't save a total of more than 100 samples so we have no disk leaks
                     dataset_audit_path = rp.get_absolute_path(dataset_audit_path)

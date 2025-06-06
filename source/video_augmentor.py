@@ -212,20 +212,66 @@ def augment_video(video, quads=None):
     return rp.gather_vars("video quads")
 
 
-def augment_videos(videos, quads=None):
-    assert len(set(video.shape for video in videos))==1
+def augment_track(track, quads, height, width):
+    """
+    Augment track points using the same perspective transform as the video frames.
+    
+    Args:
+        track: Torch tensor of shape [T, N, XYZV] (frames, points, coordinates+visibility)
+        quads: List of Quadrilateral objects defining the transform for each frame
+        height, width: Original video dimensions
+    
+    Returns:
+        Transformed track with same shape as input
+    """
+    transformed_track = track.clone()
+    
+    for t in range(len(quads)):
+        points = track[t, :, :2].cpu().numpy()
+        
+        # Transform points using the same perspective transform as the images
+        warped_points = rp.unwarped_perspective_contour(
+            points,
+            from_points=quads[t].points,
+            height=height, 
+            width=width
+        )
+        
+        # Update only x,y coordinates (keep z and visibility as is)
+        transformed_track[t, :, :2] = torch.tensor(
+            warped_points, 
+            dtype=track.dtype, 
+            device=track.device
+        )
+    
+    return transformed_track
 
+def augment_videos(videos, tracks=None, quads=None):
+    assert len(set(video.shape for video in videos))==1
+    
+    if tracks is not None:
+        assert len(videos) == len(tracks), f"Videos and tracks must have same length: {len(videos)} vs {len(tracks)}"
+    
     if rp.is_torch_tensor(videos[0]):
         T, C, VH, VW = videos[0].shape
     elif rp.is_numpy_array(videos[0]):
         T, VH, VW, C = videos[0].shape
     else:
-        assert False,type(videos[0])
+        assert False, type(videos[0])
 
     if quads is None:
         quads = get_random_quads(T, VH, VW)
-
-    return [augment_video(video, quads).video for video in videos]
+    
+    # Augment videos
+    augmented_videos = [augment_video(video, quads).video for video in videos]
+    
+    # Augment tracks if provided
+    if tracks is None:
+        return augmented_videos
+    
+    augmented_tracks = [augment_track(track, quads, VH, VW) for track in tracks]
+    
+    return augmented_videos, augmented_tracks
 
 
 def demo_augment_video():
