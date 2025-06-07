@@ -4,6 +4,14 @@ import numpy as np
 from einops import rearrange
 import numba
 
+# Try to import optimized version, fall back to numba if not available
+try:
+    from optimized_gaussian_render import draw_multiple_gaussians_fast
+    USE_OPTIMIZED_GAUSSIAN = True
+except ImportError:
+    USE_OPTIMIZED_GAUSSIAN = False
+    raise #I don't want this to ever fail duh
+
 def subdivide_track_grids(tracks, new_TH, new_TW):
     #Takes a T TH TW XYZV grid, does subdivision along the X and Y axes.
     #Output shape is T new_TH new_TW XYZV
@@ -296,10 +304,15 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42,
     selected_counter_tracks_np = selected_counter_tracks.cpu().float().numpy()
     colors_np = colors.cpu().float().numpy()
 
-    # Call optimized numba function that handles all gaussians at once
-    video_np, counter_video_np = _draw_multiple_gaussians_numba(
-        selected_tracks_np, selected_counter_tracks_np, colors_np, VH, VW, sigma
-    )
+    # Call optimized function that handles all gaussians at once
+    if USE_OPTIMIZED_GAUSSIAN:
+        video_np, counter_video_np = draw_multiple_gaussians_fast(
+            selected_tracks_np, selected_counter_tracks_np, colors_np, VH, VW, sigma
+        )
+    else:
+        video_np, counter_video_np = _draw_multiple_gaussians_numba(
+            selected_tracks_np, selected_counter_tracks_np, colors_np, VH, VW, sigma
+        )
 
     # Convert back to torch once
     video_gaussians = torch.from_numpy(video_np)
