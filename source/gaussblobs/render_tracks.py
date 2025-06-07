@@ -9,8 +9,11 @@ try:
     from ultra_fast_gaussian import draw_multiple_gaussians_fast
     USE_OPTIMIZED_GAUSSIAN = True
 except ImportError:
-    USE_OPTIMIZED_GAUSSIAN = False
-    raise #I don't want this to ever fail duh
+    from .ultra_fast_gaussian import draw_multiple_gaussians_fast
+    USE_OPTIMIZED_GAUSSIAN = True
+    #
+    # USE_OPTIMIZED_GAUSSIAN = False
+    # raise #I don't want this to ever fail duh
 
 def subdivide_track_grids(tracks, new_TH, new_TW):
     #Takes a T TH TW XYZV grid, does subdivision along the X and Y axes.
