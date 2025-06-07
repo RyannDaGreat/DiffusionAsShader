@@ -243,7 +243,7 @@ def draw_soaked_track_grid_gaussians(soaked_track_grids, VH:int, VW:int, sigma:f
 
     return video
 
-def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42, blob_colors=None):
+def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=None, blob_colors=None):
     """
     Select random tracks and render them as gaussian blobs with distinct colors.
     Optimized version that minimizes torch-numpy conversions.
@@ -281,8 +281,9 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=42,
     colors = torch.tensor(blob_colors, dtype=tracks.dtype)
     num_blobs, C = colors.shape
 
-    # Set random seed for reproducible selection
-    torch.manual_seed(seed)
+    if seed is not None:
+        # Set random seed for reproducible selection
+        torch.manual_seed(seed)
 
     # Select random track indices based on number of colors
     selected_indices = torch.randperm(N)[:num_blobs]

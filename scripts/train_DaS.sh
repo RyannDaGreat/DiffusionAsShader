@@ -3,22 +3,25 @@
 '
 Ryan: Please run this from the PARENT of the scripts directory!
 !
-cd ~/CleanCode/Github/DiffusionAsShader
+# cd ~/CleanCode/Github/DiffusionAsShader
+cd ~/CleanCode/Github/DaS_Trees/gauss_blobs
 
 bash ~/CleanCode/Management/sync_projects.bash
 
 INIT_CHECKPOINT_PATH="$HOME/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-44200"
+INIT_CHECKPOINT_PATH="$HOME/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_FIXED_DATASET_BetterAug_WithDropout_50kSamp_T2V_from_scratch_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-5500"
 python ~/CleanCode/Management/syncutil.py sync_checkpoint_folder $INIT_CHECKPOINT_PATH
 
-TRAIN_FROM_DIR=diffusion_shader_model_3666Start
+#Copy things from the original folder - these arent tracked by git
+cp -al $HOME/CleanCode/Github/DiffusionAsShader/diffusion_shader_model diffusion_as_shader_model
+
+TRAIN_FROM_DIR=diffusion_shader_model_start
 rm -rf $TRAIN_FROM_DIR
-cp -al diffusion_shader_model $TRAIN_FROM_DIR
+cp -al ~/CleanCode/Github/DiffusionAsShader/diffusion_shader_model $TRAIN_FROM_DIR
 rm -rf $TRAIN_FROM_DIR/transformer
 cp -al $INIT_CHECKPOINT_PATH/transformer $TRAIN_FROM_DIR/transformer
 
 bash scripts/train_DaS.sh
-
-
 
 
 
@@ -131,6 +134,7 @@ VALIDATION_IMAGES="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/yout
     #    )
     MODEL_PATH="./diffusion_shader_model_3666Start"
 
+    MODEL_PATH="./diffusion_shader_model_start"
 
 
 
@@ -156,7 +160,7 @@ for learning_rate in "${LEARNING_RATES[@]}"; do
           --height_buckets 480 \
           --width_buckets 720 \
           --frame_buckets 49 \
-          --dataloader_num_workers 8 \
+          --dataloader_num_workers 2 \
           --pin_memory \
           --validation_prompt \"$VALIDATION_PROMPT\" \
           --validation_images \"$VALIDATION_IMAGES\" \

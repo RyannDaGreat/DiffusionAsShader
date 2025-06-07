@@ -1,6 +1,7 @@
 import rp
 import math
 import numpy as np
+import torch
 
 
 class Quadrilateral:
@@ -249,15 +250,16 @@ def augment_track(track, quads, height, width):
 def augment_videos(videos, tracks=None, quads=None):
     assert len(set(video.shape for video in videos))==1
     
-    if tracks is not None:
-        assert len(videos) == len(tracks), f"Videos and tracks must have same length: {len(videos)} vs {len(tracks)}"
-    
     if rp.is_torch_tensor(videos[0]):
         T, C, VH, VW = videos[0].shape
     elif rp.is_numpy_array(videos[0]):
         T, VH, VW, C = videos[0].shape
     else:
         assert False, type(videos[0])
+
+    if tracks is not None:
+        assert len(set(map(len,tracks)))==1, f'Not all tracks have same length: {list(map(len,tracks))}'
+
 
     if quads is None:
         quads = get_random_quads(T, VH, VW)

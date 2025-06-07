@@ -841,7 +841,9 @@ def main(args):
 
                     for t, keep in enumerate(temporal_dropout):
                         if not keep:
-                            counter_video_maps[:, t] = 0
+                            #IN THIS VERSION, WE MASK OUT THE TARGET TRAJECTORIES
+                            #WHY? BECAUSE THEN THE USER DOESN'T NEED TO SPECIFY AS MUCH
+                            tracking_maps[:, t] = 0
 
 
                 # Encode prompts

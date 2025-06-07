@@ -83,8 +83,8 @@ class VideoDataset(Dataset):
         # For a more detailed explanation about preparing dataset format, checkout the README.
         if dataset_file is None:
             (
-                self.prompts,
-                self.video_paths,
+            self.prompts,
+            self.video_paths,
             ) = self._load_dataset_from_local_path()
         else:
             (
@@ -388,7 +388,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
 
             #HERE, I'M GOING TO LOAD MORE THINGS:
             #LOAD TRACKS (These should be in all samples)
-            sample_root = rp.get_parent_folder(path)
+            sample_root = rp.get_parent_folder(str(path))
             #
             tracks_path         = rp.path_join(sample_root, 'video.mp4__DiffusionAsShaderCondition/video_tracks_spatracker.pt')
             counter_tracks_path = rp.path_join(sample_root, 'firstLastInterp_Jack2000.mp4__DiffusionAsShaderCondition/firstLastInterp_Jack2000_tracks_spatracker.pt')
@@ -407,7 +407,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
 
 
             #Only 3 variants for each video please! Easier to cache!
-            rp.seed_all(rp.millis()%3 + rp.get_sha256_hash(str(path).encode(),format='int')%10000)
+            rp.seed_all(rp.millis()%3 + rp.get_sha256_hash(str(path).encode(),format='int')%1000000)
 
             assert len(frames)==len(tracking_frames)==len(counter_video_frames)==len(counter_tracking_frames),f'NOT ALL LENGTHS ARE EQUAL: len(frames)={len(frames)} AND len(tracking_frames)={len(tracking_frames)} AND len(counter_video_frames)={len(counter_video_frames)} AND len(counter_tracking_frames)={len(counter_tracking_frames)}'
 
@@ -430,14 +430,14 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                 return rp.resize_list(video, len(video)*2)[len(video)//2:len(video)//2+len(video)]
             #
             def two_thirds_speed_later_half(video):
-                return rp.resize_list(video, int(len(video)*1.5))[len(video):]
+                return rp.resize_list(rp.resize_list(video, int(len(video)*1.5))[len(video):],len(video))
             #
             def two_thirds_speed_middle(video):
                 extended = rp.resize_list(video, int(len(video)*1.5))
                 start = int(len(extended)*1/6)
                 return extended[start:start+len(video)]            
             #
-            RANDOM_SPEED = [
+            SPEED_CHOICES = [
                 regular_speed,
                 half_speed,
                 two_thirds_speed,
@@ -446,10 +446,10 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                 two_thirds_speed_later_half,
                 two_thirds_speed_middle,
             ]
-            RANDOM_SPEED = rp.random_element(RANDOM_SPEED)
+            RANDOM_SPEED = rp.random_element(SPEED_CHOICES)
             if rp.random_chance(.5):
                 #Sometimes I want even less overlap...
-                VIDEO_SPEED = rp.random_element(RANDOM_SPEED)
+                VIDEO_SPEED = rp.random_element(SPEED_CHOICES)
 
             #At least one will be full speed
             VIDEO_SPEED, COUNTER_SPEED = regular_speed, RANDOM_SPEED
@@ -460,6 +460,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                 #20% of the time let's make them the same video for perfect correspondences
                 counter_video_frames    = 0 + frames
                 counter_tracking_frames = 0 + tracking_frames
+                counter_video_tracks    = 0 + video_tracks
                 audit_metadata+=['Swap']
 
             rp.fansi_print(f'dataset.py: VIDEO_SPEED={VIDEO_SPEED.__name__}      COUNTER_SPEED={COUNTER_SPEED.__name__}','white blue on black gray italic')
@@ -467,31 +468,34 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             #
             assert len(frames)==len(tracking_frames)==len(counter_video_frames)==len(counter_tracking_frames),f'NOT ALL LENGTHS ARE EQUAL: len(frames)={len(frames)} AND len(tracking_frames)={len(tracking_frames)} AND len(counter_video_frames)={len(counter_video_frames)} AND len(counter_tracking_frames)={len(counter_tracking_frames)}'
 
-            original_frames                  = frames
-            original_tracking_frames         = tracking_frames
-            original_counter_video_frames    = counter_video_frames
-            original_counter_tracking_frames = counter_tracking_frames
-
+            # original_frames                  = frames
+            # original_tracking_frames         = tracking_frames
+            # original_counter_video_frames    = counter_video_frames
+            # original_counter_tracking_frames = counter_tracking_frames
 
             frames          = VIDEO_SPEED(frames)
             tracking_frames = VIDEO_SPEED(tracking_frames)
+            video_tracks    = VIDEO_SPEED(video_tracks)
             #
             counter_video_frames    = COUNTER_SPEED(counter_video_frames)
             counter_tracking_frames = COUNTER_SPEED(counter_tracking_frames)
+            counter_video_tracks    = COUNTER_SPEED(counter_video_tracks)
 
             assert len(frames)==len(tracking_frames)==len(counter_video_frames)==len(counter_tracking_frames),f'NOT ALL LENGTHS ARE EQUAL: len(frames)={len(frames)} AND len(tracking_frames)={len(tracking_frames)} AND len(counter_video_frames)={len(counter_video_frames)} AND len(counter_tracking_frames)={len(counter_tracking_frames)}'
 
 
             #Random Reversals
             if rp.random_chance(.2):
-                rp.fansi_print(f"dataset.py: REVERSING GROUND TRUTH", "white blue on black gray italic")
+                rp.fansi_print("dataset.py: REVERSING GROUND TRUTH", "white blue on black gray italic")
                 frames          = frames         .flip(0)
                 tracking_frames = tracking_frames.flip(0)
+                video_tracks    = video_tracks   .flip(0)
                 audit_metadata+=['REV-GT']
             if rp.random_chance(.3):
-                rp.fansi_print(f"dataset.py: REVERSING COUNTERFACTUALS", "white blue on black gray italic")
+                rp.fansi_print("dataset.py: REVERSING COUNTERFACTUALS", "white blue on black gray italic")
                 counter_video_frames    = counter_video_frames   .flip(0)
                 counter_tracking_frames = counter_tracking_frames.flip(0)
+                counter_video_tracks    = counter_video_tracks   .flip(0)
                 audit_metadata+=['REV-CTR']
 
             #Random Sliding Crops
@@ -506,18 +510,33 @@ class VideoDatasetWithResizingTracking(VideoDataset):
 
             #Make the gaussian blobs videos
             from source.gaussblobs.render_tracks import draw_blobs_videos
-            blobs_video, counter_blobs_video = draw_blobs_videos(
-                frames,
-                counter_video_frames,
-                video_tracks,
-                counter_video_tracks,
-                blob_colors='random_of_7',
-                sigma=10,
+            rp.tic()
+            blobs_video, counter_blobs_video = rp.gather(
+                draw_blobs_videos(
+                    frames,
+                    counter_video_frames,
+                    video_tracks,
+                    counter_video_tracks,
+                    blob_colors="random_of_7",
+                    sigma=10,
+                ),
+                "video_gaussians",
+                "counter_video_gaussians",
             )
+            #Make sure they're RGB, not RGBA
+            blobs_video         = blobs_video        [:,:3]
+            counter_blobs_video = counter_blobs_video[:,:3]
             #Normalize to from [0,1] -> [-1,1]
             blobs_video         = blobs_video         * 2 - 1
             counter_blobs_video = counter_blobs_video * 2 - 1
-
+            rp.validate_tensor_shapes(
+                blobs_video             = 'torch: T VC VH VW',
+                counter_blobs_video     = 'torch: T VC VH VW',
+                counter_tracking_frames = 'torch: T VC VH VW',
+                tracking_frames         = 'torch: T VC VH VW',
+                VC = 3,
+            )
+            rp.fansi_print(f"BLOBBERY BLUMMBERS TOOK {rp.toc()} SECONDS",'yellow green bold on dark blue')
             ##################################################################################################  
             ##################################################################################################  
             ##################################################################################################  
@@ -538,24 +557,52 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             counter_tracking_frames = counter_blobs_video
             tracking_frames = blobs_video
             
-            # if rp.random_chance(1/200):
-            if rp.random_chance(1/10):
+            if rp.random_chance(1/200):
+            # if rp.random_chance(1/10):
+            # if rp.random_chance(1/1):
                 try:
-                    dataset_audit_path = f".random_dataset_samples/sample_{rp.random_int(100)}.pkl" #Don't save a total of more than 100 samples so we have no disk leaks
+                    dataset_audit_path = f"random_dataset_samples/sample_{rp.random_int(1000)}.pkl" #Don't save a total of more than 100 samples so we have no disk leaks
                     dataset_audit_path = rp.get_absolute_path(dataset_audit_path)
                     rp.fansi_print(f"SAVING RANDOM DATASET SAMPLE TO {dataset_audit_path}", "green red white bold underdouble")
-                    sample = image, frames, tracking_frames, counter_tracking_frames, counter_video_frames
+                    sample = (
+                        image,
+                        frames,
+                        tracking_frames + frames / 5,
+                        counter_tracking_frames + counter_video_frames / 5,
+                        counter_video_frames, 
+                    )
                     rp.object_to_file(sample, dataset_audit_path)
 
                     audit_videos=[rp.as_numpy_video(x/2+.5) for x in sample]
                     audit_videos=rp.labeled_videos(audit_videos,'Image Frames Tracks CounterTracks CounterFrames'.split())
                     audit_videos=rp.horizontally_concatenated_videos(audit_videos)
-                    orig_videos = rp.horizontally_concatenated_videos(
-                        [rp.as_numpy_video(x/2+.5) for x in [original_frames*0, original_frames, original_tracking_frames, original_counter_tracking_frames, original_counter_video_frames]]
-                    )
                     audit_videos=rp.labeled_images(audit_videos,"  :  ".join(audit_metadata))
-                    
-                    print(rp.save_video_mp4(rp.vertically_concatenated_videos(audit_videos,orig_videos),dataset_audit_path+'.mp4',framerate=20))
+
+                    # orig_videos = rp.horizontally_concatenated_videos(
+                    #     [
+                    #         rp.as_numpy_video(x / 2 + 0.5)
+                    #         for x in [
+                    #             original_frames * 0,
+                    #             original_frames,
+                    #             original_tracking_frames,
+                    #             original_counter_tracking_frames,
+                    #             original_counter_video_frames,
+                    #         ]
+                    #     ]
+                    # )
+
+                    print(
+                        rp.save_video_mp4(
+                            # rp.vertically_concatenated_videos(
+                            #     [
+                                    audit_videos,
+                                    # orig_videos,
+                            #     ]
+                            # ),
+                            dataset_audit_path + ".mp4",
+                            framerate=20,
+                        )
+                    )
 
                 except Exception:
                     rp.print_stack_trace()
@@ -696,7 +743,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                     }
             except Exception as e:
                 rp.fansi_print(f'DATASET ERROR! index={index}    video_path={self.video_paths[index]}    tracking_path={self.tracking_paths[index]}    {e}','red red bold on black black undercurl')
-                # rp.print_stack_trace()
+                rp.print_stack_trace()
                 index=rp.random_index(self)
             
     
