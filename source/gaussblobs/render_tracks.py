@@ -6,7 +6,7 @@ import numba
 
 # Try to import optimized version, fall back to numba if not available
 try:
-    from optimized_gaussian_render import draw_multiple_gaussians_fast
+    from ultra_fast_gaussian import draw_multiple_gaussians_fast
     USE_OPTIMIZED_GAUSSIAN = True
 except ImportError:
     USE_OPTIMIZED_GAUSSIAN = False
