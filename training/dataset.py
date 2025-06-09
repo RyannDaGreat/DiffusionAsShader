@@ -557,7 +557,8 @@ class VideoDatasetWithResizingTracking(VideoDataset):
             counter_tracking_frames = counter_blobs_video
             tracking_frames = blobs_video
             
-            if rp.random_chance(1/200):
+            # if rp.random_chance(1/200):
+            if rp.random_chance(1/100):
             # if rp.random_chance(1/10):
             # if rp.random_chance(1/1):
                 try:
