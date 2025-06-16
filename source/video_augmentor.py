@@ -189,12 +189,13 @@ def demo_get_random_quads():
 def augment_video(video, quads=None):
     T, VH, VW, C = video.shape
 
-    if video.min()<0:
-        #HACK for processing if given in range -1, 1
-        min = video.min()
-        max = video.max()
-        rp.fansi_print(f"augment_video using range hack: min={min}, max={max}, shape={video.shape}",'italic gray')
-        return augment_video((video - min) / (max - min), quads) * (max - min) + min
+    # NOT needed with newest update of RP
+    # if video.min()<0:
+    #     #HACK for processing if given in range -1, 1
+    #     min = video.min()
+    #     max = video.max()
+    #     rp.fansi_print(f"augment_video using range hack: min={min}, max={max}, shape={video.shape}",'italic gray')
+    #     return augment_video((video - min) / (max - min), quads) * (max - min) + min
 
     if quads is None:
         quads = get_random_quads(T, VH, VW)
