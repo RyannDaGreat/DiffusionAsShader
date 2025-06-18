@@ -253,6 +253,11 @@ def run_test(index):
         output_video_path+='_copy.mp4'
         output_preview_path+='_copy.mp4'
 
+        # counter_video_map_path = make_zoomed(video_path)
+        # counter_tracking_map_path = make_zoomed(tracking_map_path)
+        # output_video_path+='_zoomed.mp4'
+        # output_preview_path+='_zoomed.mp4'
+
         # video_path=make_halfspeed(video_path)
         # tracking_map_path=make_halfspeed(tracking_map_path)
         # output_video_path+='_halfspeed.mp4'
@@ -320,6 +325,8 @@ checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_c
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-29000'
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-29000'
 checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_BetterAug_WithDropout_50kSamp_T2V_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-9000'
+checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_FIXED_DATASET_BetterAug_WithDropout_50kSamp_T2V_from_scratch_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-2500'
+checkpoint_root = '/home/jupyter/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_FIXED_DATASET_BetterAug_WithDropout_50kSamp_T2V_from_scratch_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-17000'
 
 checkpoint_title = rp.get_folder_name(checkpoint_root)
 
