@@ -274,13 +274,13 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=Non
 
     # Set default colors if none provided
     default_blob_colors = [
+        [1, 1, 1, 1],  # white
         [1, 0, 0, 1],  # red
         [0, 1, 0, 1],  # green
         [0, 0, 1, 1],  # blue
         [0, 1, 1, 1],  # cyan
         [1, 0, 1, 1],  # magenta
         [1, 1, 0, 1],  # yellow
-        [1, 1, 1, 1],  # white
     ]
     if blob_colors is None:
         blob_colors = default_blob_colors

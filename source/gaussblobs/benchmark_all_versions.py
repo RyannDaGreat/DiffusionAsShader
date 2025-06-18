@@ -15,13 +15,13 @@ def create_test_data(T, N, VH, VW, visibility_prob=0.8):
     counter_tracks[:, :, 3] = tracks[:, :, 3]
     
     colors = np.array([
-        [1, 0, 0, 1],
-        [0, 1, 0, 1],
-        [0, 0, 1, 1],
-        [1, 1, 0, 1],
-        [1, 0, 1, 1],
-        [0, 1, 1, 1],
-        [1, 1, 1, 1],
+        [1, 1, 1, 1],  # white
+        [1, 0, 0, 1],  # red
+        [0, 1, 0, 1],  # green
+        [0, 0, 1, 1],  # blue
+        [0, 1, 1, 1],  # cyan
+        [1, 0, 1, 1],  # magenta
+        [1, 1, 0, 1],  # yellow
     ], dtype=np.float32)
     
     return tracks, counter_tracks, colors
