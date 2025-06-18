@@ -330,6 +330,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
         tracking_path: Path,
         counter_tracking_path: Path,
         counter_video_path: Path,
+        prompt=None,
     ) -> torch.Tensor:
         if self.load_tensors:
             return self._load_preprocessed_latents_and_embeds(path, tracking_path)
@@ -565,6 +566,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                     dataset_audit_path = f"random_dataset_samples/sample_{rp.random_int(1000)}.pkl" #Don't save a total of more than 100 samples so we have no disk leaks
                     dataset_audit_path = rp.get_absolute_path(dataset_audit_path)
                     rp.fansi_print(f"SAVING RANDOM DATASET SAMPLE TO {dataset_audit_path}", "green red white bold underdouble")
+
                     sample = (
                         image,
                         frames,
@@ -572,7 +574,20 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                         counter_tracking_frames + counter_video_frames / 5,
                         counter_video_frames, 
                     )
-                    rp.object_to_file(sample, dataset_audit_path)
+
+                    rp.object_to_file(
+                        rp.gather_vars(
+                            'image',
+                            'frames',
+                            'tracking_frames',
+                            'counter_tracking_frames',
+                            'counter_video_frames',
+                            'prompt',
+                            'video_tracks',
+                            'counter_video_tracks',
+                        ),
+                        dataset_audit_path,
+                    )
 
                     audit_videos=[rp.as_numpy_video(x/2+.5) for x in sample]
                     audit_videos=rp.labeled_videos(audit_videos,'Image Frames Tracks CounterTracks CounterFrames'.split())
@@ -722,15 +737,17 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                     #     },
                     # }
                 else:
+                    prompt = self.id_token + self.prompts[index]
                     image, video, tracking_map, counter_tracking_map, counter_video_map, _ = self._preprocess_video(
                         self.video_paths[index],
                         self.tracking_paths[index],
                         self.counter_tracking_paths[index],
                         self.counter_video_paths[index],
+                        prompt=prompt,
                     )
                     rp.fansi_print(f'Good sample at index={index}','green green italic bold')
                     return {
-                        "prompt": self.id_token + self.prompts[index],
+                        "prompt": prompt,
                         "image": image,
                         "video": video,
                         "tracking_map": tracking_map,
