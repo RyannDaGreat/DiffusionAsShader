@@ -323,12 +323,25 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=Non
     counter_video_gaussians = torch.from_numpy(counter_video_np)
 
     rp.validate_tensor_shapes(
-        tracks                      = "torch: T N XYZV           ",
-        counter_tracks              = "torch: T N XYZV           ",
-        colors                      = "torch: B C                ",
-        video_gaussians             = "torch: T C VH VW          ",
-        counter_video_gaussians     = "torch: T C VH VW          ",
-        XYZV=4, C=C, B=num_blobs,
+        # Input tensors
+        tracks                      = "torch: T N XYZV                ",
+        counter_tracks              = "torch: T N XYZV                ",
+        colors                      = "torch:   B C                   ",
+        # Selected tracks
+        selected_tracks             = "torch: T B XYZV                ",
+        selected_counter_tracks     = "torch: T B XYZV                ",
+        # Numpy conversions
+        selected_tracks_np          = "numpy: T B XYZV                ",
+        selected_counter_tracks_np  = "numpy: T B XYZV                ",
+        colors_np                   = "numpy:   B C                   ",
+        # Output numpy arrays
+        video_np                    = "numpy: T   C    VH VW          ",
+        counter_video_np            = "numpy: T   C    VH VW          ",
+        # Final torch outputs
+        video_gaussians             = "torch: T   C    VH VW          ",
+        counter_video_gaussians     = "torch: T   C    VH VW          ",
+        # Constants
+        XYZV=4, C=C, B=num_blobs, VH=VH, VW=VW,
     )
 
     return video_gaussians, counter_video_gaussians
