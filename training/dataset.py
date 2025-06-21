@@ -408,7 +408,7 @@ class VideoDatasetWithResizingTracking(VideoDataset):
 
 
             #Only 3 variants for each video please! Easier to cache!
-            rp.seed_all(rp.millis()%3 + rp.get_sha256_hash(str(path).encode(),format='int')%1000000)
+            rp.seed_all(rp.millis()%6 + rp.get_sha256_hash(str(path).encode(),format='int')%1000000)
 
             assert len(frames)==len(tracking_frames)==len(counter_video_frames)==len(counter_tracking_frames),f'NOT ALL LENGTHS ARE EQUAL: len(frames)={len(frames)} AND len(tracking_frames)={len(tracking_frames)} AND len(counter_video_frames)={len(counter_video_frames)} AND len(counter_tracking_frames)={len(counter_tracking_frames)}'
 
@@ -518,7 +518,8 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                     counter_video_frames,
                     video_tracks,
                     counter_video_tracks,
-                    blob_colors="random_of_7",
+                    # blob_colors="random_of_7",
+                    blob_colors="random_of_random masked",
                     sigma=10,
                 ),
                 "video_gaussians",
