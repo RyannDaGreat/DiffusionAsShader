@@ -3,6 +3,13 @@ import torch
 import numpy as np
 from einops import rearrange
 import numba
+import sys
+
+try:
+    from ..temporal_dropout import temporal_dropout_boolean_list
+except ImportError:
+    sys.path.append(rp.get_absolute_path('..'))
+    from temporal_dropout import temporal_dropout_boolean_list
 
 # Try to import optimized version, fall back to numba if not available
 try:
@@ -282,7 +289,7 @@ def get_all_bright_blob_colors():
         r_bins        = "numpy: Q",
         g_bins        = "numpy: Q",
         b_bins        = "numpy: Q",
-        color         = "numpy: Q 3",
+        colors        = "numpy: Q 3",
         bright_colors = "numpy: W 3",
         E=num_bins,
         Q=num_bins**3,
@@ -290,32 +297,32 @@ def get_all_bright_blob_colors():
 
     return bright_colors
 
-col26=[[1. , 1. , 1. ],
-       [1. , 0. , 0. ],
-       [0. , 1. , 0. ],
-       [0. , 0. , 1. ],
-       [0. , 1. , 1. ],
-       [1. , 0. , 1. ],
-       [1. , 1. , 0. ],
-       [0.5, 0.5, 0.5],
-       [0. , 0. , 0.5],
-       [0. , 0.5, 0. ],
-       [0.5, 0. , 0. ],
-       [0. , 0.5, 0.5],
-       [0.5, 0. , 0.5],
-       [0.5, 0.5, 0. ],
-       [0. , 0.5, 1. ],
-       [0. , 1. , 0.5],
-       [0.5, 0. , 1. ],
-       [0.5, 1. , 0. ],
-       [1. , 0. , 0.5],
-       [1. , 0.5, 0. ],
-       [0.5, 0.5, 1. ],
-       [0.5, 1. , 0.5],
-       [1. , 0.5, 0.5],
-       [0.5, 1. , 1. ],
-       [1. , 0.5, 1. ],
-       [1. , 1. , 0.5],]
+col26=[[1. , 1. , 1. , 1.],
+       [1. , 0. , 0. , 1.],
+       [0. , 1. , 0. , 1.],
+       [0. , 0. , 1. , 1.],
+       [0. , 1. , 1. , 1.],
+       [1. , 0. , 1. , 1.],
+       [1. , 1. , 0. , 1.],
+       [0.5, 0.5, 0.5, 1.],
+       [0. , 0. , 0.5, 1.],
+       [0. , 0.5, 0. , 1.],
+       [0.5, 0. , 0. , 1.],
+       [0. , 0.5, 0.5, 1.],
+       [0.5, 0. , 0.5, 1.],
+       [0.5, 0.5, 0. , 1.],
+       [0. , 0.5, 1. , 1.],
+       [0. , 1. , 0.5, 1.],
+       [0.5, 0. , 1. , 1.],
+       [0.5, 1. , 0. , 1.],
+       [1. , 0. , 0.5, 1.],
+       [1. , 0.5, 0. , 1.],
+       [0.5, 0.5, 1. , 1.],
+       [0.5, 1. , 0.5, 1.],
+       [1. , 0.5, 0.5, 1.],
+       [0.5, 1. , 1. , 1.],
+       [1. , 0.5, 1. , 1.],
+       [1. , 1. , 0.5, 1.],]
 #col26 MADE WITH: https://gist.github.com/SqrtRyan/149477f38fc95b7b6fd36864bc5c358e
 #DISTANCES: [round(min(euclidean_distance(col26[i],y) for y in col26[:i]) ,3) for i in range(1,26)]
 #     --->  [1.414, 1.414, 1.414, 1.0, 1.0, 1.0, 0.866, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
@@ -351,12 +358,21 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=Non
     if blob_colors is None:
         blob_colors = default_blob_colors
     
+    masked=False
+    if 'masked' in blob_colors:
+        #'random_of_random masked'
+        masked=True
+        rp.fansi_print(blob_colors, 'yellow bold yellow')
+        blob_colors = blob_colors.replace('masked','').strip()
+
     if blob_colors == 'random_of_random':
         blob_colors = rp.random_choice(
             'random_of_7',
             'random_of_26',
             'random_of_64',
         )
+
+    blob_colors_str = blob_colors if isinstance(blob_colors, str) else f'[{len(blob_colors)} MANUAL COLORS]'
 
     if blob_colors == 'random_of_7':
         num_colors = rp.random_int(1,7)
@@ -369,6 +385,7 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=Non
     if blob_colors == 'random_of_64':
         num_colors = rp.random_int(1,64)
         blob_colors = rp.random_batch(get_all_bright_blob_colors(), num_colors)
+
 
     # Convert to tensor and get dimensions
     colors = torch.tensor(blob_colors, dtype=tracks.dtype)
@@ -384,6 +401,145 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=Non
     # Extract selected tracks for both videos - do this once
     selected_tracks = tracks[:, selected_indices, :]  # [T, num_blobs, XYZV]
     selected_counter_tracks = counter_tracks[:, selected_indices, :]  # [T, num_blobs, XYZV]
+
+    if masked:
+
+        def full(t,ct):
+            return t,ct
+
+        def counter_mask(t,ct):
+            rp.validate_tensor_shapes(
+                 t='T XYZV',
+                ct='T XYZV',
+                XYZV=4, T=T,
+            )
+
+            mask = temporal_dropout_boolean_list(T, proportion = rp.random_float())
+            for i,e in enumerate(mask):
+                ct[:,3] *= e
+
+            return t,ct
+
+        def sync_mask(t,ct):
+            rp.validate_tensor_shapes(
+                 t='T XYZV',
+                ct='T XYZV',
+                XYZV=4, T=T,
+            )
+
+            mask = temporal_dropout_boolean_list(T, proportion = rp.random_float())
+            for i,e in enumerate(mask):
+                ct[:,3] *= e
+                t [:,3] *= e
+
+            return t,ct
+
+        def point_to_point(t,ct):
+            rp.validate_tensor_shapes(
+                 t='T XYZV',
+                ct='T XYZV',
+                XYZV=4, T=T,
+            )
+
+            #Times where both tracks are visible
+            candidates = [i for i in range(T) if ct[i,3] and t[i,3]]
+
+            if not candidates:
+                return t,ct
+
+            num_points = rp.random_int(1, rp.random_int(1, rp.random_int(1, len(candidates))))
+            point_times = rp.random_batch(candidates, num_points)
+
+            #Zero out all visibility
+            t [:,3] = 0
+            ct[:,3] = 0
+
+            #We'll add some visibility before and after each dot in case a single frame is too fast for good use    
+            radius = rp.random_int(0,2)
+
+            #Then Add it Back
+            for time in rp.shuffled(point_times):
+                t [time,3] = 1
+                ct[time,3] = 1
+
+                #Pad out the values a bit according to radius
+                if radius:
+                    for extra_time in range(time-radius, time+radius+1):
+                        if 0<=extra_time<T:
+                            t [extra_time] = t [time]
+                            ct[extra_time] = ct[time]
+
+            return t,ct
+
+        def track_to_point(t,ct):
+            rp.validate_tensor_shapes(
+                 t='T XYZV',
+                ct='T XYZV',
+                XYZV=4, T=T,
+            )
+
+            #Times where both tracks are visible
+            candidates = [i for i in range(T) if ct[i,3]]
+
+            if not candidates:
+                return t,ct
+
+            num_points = rp.random_int(1, rp.random_int(1, rp.random_int(1, len(candidates))))
+            point_times = rp.random_batch(candidates, num_points)
+
+            #Zero out all visibility
+            ct[:,3] = 0
+
+            #We'll add some visibility before and after each dot in case a single frame is too fast for good use    
+            radius = rp.random_int(0,2)
+
+            #Then Add it Back
+            for time in rp.shuffled(point_times):
+                ct[time,3] = 1
+
+                #Pad out the values a bit according to radius
+                if radius:
+                    for extra_time in range(time-radius, time+radius+1):
+                        if 0<=extra_time<T:
+                            ct[extra_time] = ct[time]
+
+            return t,ct
+
+        all_mask_modes = [
+            full,
+            counter_mask,
+            sync_mask,
+            point_to_point,
+            point_to_point,
+            track_to_point,
+        ]
+
+        mask_modes = [rp.random_element(all_mask_modes) for _ in range(num_blobs)]
+
+        for blob_index, blob_mask_mode in enumerate(mask_modes):
+            [
+                selected_counter_tracks[:, blob_index, :],
+                selected_tracks        [:, blob_index, :],
+            ] = blob_mask_mode(
+                #IMPORTANT NOTE: I messed up; I swapped counter for target in the above helper funcs
+                #I'M REVERSING IT HERE! 
+                selected_counter_tracks[:, blob_index, :]+0,
+                selected_tracks        [:, blob_index, :]+0,
+            )
+
+            #If one of the two is completely invisible, make the other invisible as well. Less training noise.
+            if not selected_tracks[:, blob_index, 3].any():
+                selected_counter_tracks[:,blob_index,3]=0
+            elif not selected_counter_tracks[:, blob_index, 3].any():
+                selected_tracks[:,blob_index,3]=0
+
+            rp.fansi_print_lines(
+                f"TRACK MASK {blob_index} {blob_colors_str} VIA {blob_mask_mode.__name__}",
+                f"    {''.join(str(int(v)) for v in selected_tracks        [:, blob_index, 3])}",
+                f"    {''.join(str(int(v)) for v in selected_counter_tracks[:, blob_index, 3])}",
+                style="orange bold italic",
+            )
+        
 
     # Convert to numpy once for numba processing
     selected_tracks_np = selected_tracks.cpu().float().numpy()
@@ -649,7 +805,7 @@ def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_c
 
 
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-7Cxuw5aZAY_405555963_425701967" #GOOD
-#sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-D3HZiCsa_Q_781740353_789776475" #GOOD
+sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-D3HZiCsa_Q_781740353_789776475" #GOOD
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-6v_98wULaw_696440406_708166584" #GOOD
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-mYvWIeIEHE_268812917_274856884" #MEH
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-IexzyFb-rs_313386441_330096967" #MEH
@@ -659,7 +815,7 @@ def draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, blob_c
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-GykhXGPdCY_1043306_27011439"
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-1pwRBTrh3w_709851076_714940344"
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-IMTp3vElAw_39488821_46186036"#highway
-sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-ALNgmWCI9o_376096922_383032458"#Steak Man
+#sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-ALNgmWCI9o_376096922_383032458"#Steak Man
 # sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-MZovLVMlp8_542531041_560826468"
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-HmktmTdFg8_296236407_301336408"
 #sample_dir = "/Users/burgert/CleanCode/Sandbox/youtube-ds/-Ss4S_5u1Kc_366437715_386234521"
@@ -700,6 +856,7 @@ def main():
         video         = rp.load_video("video.mp4"            , use_cache=True)
         counter_video = rp.load_video("firstLastInterp_Jack2000.mp4", use_cache=True)
 
+
         video = rp.resize_images(video,size=(480,720))
         video=rp.resize_list(video,49)
 
@@ -733,13 +890,13 @@ def main():
 
 
     # Run video warp visualization
-    warp_results = video_warp(video, counter_video, video_tracks, counter_tracks)
-    rp.save_video_mp4(warp_results.preview_video, framerate=20)
-    rp.display_image_slideshow(warp_results.preview_video)
+    #warp_results = video_warp(video, counter_video, video_tracks, counter_tracks)
+    #rp.save_video_mp4(warp_results.preview_video, framerate=20)
+    #rp.display_image_slideshow(warp_results.preview_video)
 
     # Run blob visualization
-    blob_results = draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, visualize=True)
-    rp.save_video_mp4(blob_results.gaussian_preview, "gaussian_tracks_visualization.mp4", framerate=20)
+    blob_results = draw_blobs_videos(video, counter_video, video_tracks, counter_tracks, visualize=True,blob_colors='random_of_random masked')
+    # rp.save_video_mp4(blob_results.gaussian_preview, "gaussian_tracks_visualization.mp4", framerate=20)
     rp.display_image_slideshow(blob_results.gaussian_preview)
 
 if __name__=='__main__':
