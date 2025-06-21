@@ -325,10 +325,10 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=Non
     rp.validate_tensor_shapes(
         tracks                      = "torch: T N XYZV           ",
         counter_tracks              = "torch: T N XYZV           ",
-        colors                      = "torch: num_blobs C        ",
+        colors                      = "torch: B C                ",
         video_gaussians             = "torch: T C VH VW          ",
         counter_video_gaussians     = "torch: T C VH VW          ",
-        XYZV=4, C=C, num_blobs=num_blobs,
+        XYZV=4, C=C, B=num_blobs,
     )
 
     return video_gaussians, counter_video_gaussians

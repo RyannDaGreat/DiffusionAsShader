@@ -535,7 +535,9 @@ class VideoDatasetWithResizingTracking(VideoDataset):
                 counter_blobs_video     = 'torch: T VC VH VW',
                 counter_tracking_frames = 'torch: T VC VH VW',
                 tracking_frames         = 'torch: T VC VH VW',
-                VC = 3,
+                video_tracks            = 'torch: T N XYZV',
+                counter_video_tracks    = 'torch: T N XYZV',
+                T=T, XYZV=4, VC = 3,
             )
             rp.fansi_print(f"BLOBBERY BLUMMBERS TOOK {rp.toc()} SECONDS",'yellow green bold on dark blue')
             ##################################################################################################  
