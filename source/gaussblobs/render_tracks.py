@@ -254,6 +254,42 @@ def draw_soaked_track_grid_gaussians(soaked_track_grids, VH:int, VW:int, sigma:f
 
     return video
 
+@rp.memoized
+def get_all_bright_blob_colors():
+    """
+    EXAMPLE:
+        >>> import rp
+        ... rp.display_image(
+        ...     rp.tiled_images(
+        ...         [
+        ...             rp.uniform_float_color_image(64, 64, x)
+        ...             for x in rp.random_batch(get_all_blob_colors(), 100)
+        ...         ],
+        ...         border_thickness=0,
+        ...     )
+        ... )
+    """
+    num_bins = 256
+    bins = np.linspace(0, 1, num_bins)
+    r_bins = np.tile(np.repeat(bins, num_bins**0), num_bins**2)
+    g_bins = np.tile(np.repeat(bins, num_bins**1), num_bins**1)
+    b_bins = np.tile(np.repeat(bins, num_bins**2), num_bins**0)
+    colors = np.stack((r_bins, g_bins, b_bins), axis=1)
+    bright_colors = colors[colors.max(1) > 0.5]
+
+    rp.validate_tensor_shapes(
+        bins          = "numpy: E",
+        r_bins        = "numpy: Q",
+        g_bins        = "numpy: Q",
+        b_bins        = "numpy: Q",
+        color         = "numpy: Q 3",
+        bright_colors = "numpy: W 3",
+        E=num_bins,
+        Q=num_bins**3,
+    )
+
+    return bright_colors
+
 def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=None, blob_colors=None):
     """
     Select random tracks and render them as gaussian blobs with distinct colors.
