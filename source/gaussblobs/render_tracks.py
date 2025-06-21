@@ -290,6 +290,36 @@ def get_all_bright_blob_colors():
 
     return bright_colors
 
+col26=[[1. , 1. , 1. ],
+       [1. , 0. , 0. ],
+       [0. , 1. , 0. ],
+       [0. , 0. , 1. ],
+       [0. , 1. , 1. ],
+       [1. , 0. , 1. ],
+       [1. , 1. , 0. ],
+       [0.5, 0.5, 0.5],
+       [0. , 0. , 0.5],
+       [0. , 0.5, 0. ],
+       [0.5, 0. , 0. ],
+       [0. , 0.5, 0.5],
+       [0.5, 0. , 0.5],
+       [0.5, 0.5, 0. ],
+       [0. , 0.5, 1. ],
+       [0. , 1. , 0.5],
+       [0.5, 0. , 1. ],
+       [0.5, 1. , 0. ],
+       [1. , 0. , 0.5],
+       [1. , 0.5, 0. ],
+       [0.5, 0.5, 1. ],
+       [0.5, 1. , 0.5],
+       [1. , 0.5, 0.5],
+       [0.5, 1. , 1. ],
+       [1. , 0.5, 1. ],
+       [1. , 1. , 0.5],]
+#col26 MADE WITH: https://gist.github.com/SqrtRyan/149477f38fc95b7b6fd36864bc5c358e
+#DISTANCES: [round(min(euclidean_distance(col26[i],y) for y in col26[:i]) ,3) for i in range(1,26)]
+#     --->  [1.414, 1.414, 1.414, 1.0, 1.0, 1.0, 0.866, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+
 def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=None, blob_colors=None):
     """
     Select random tracks and render them as gaussian blobs with distinct colors.
@@ -320,9 +350,25 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=Non
     ]
     if blob_colors is None:
         blob_colors = default_blob_colors
+    
+    if blob_colors == 'random_of_random':
+        blob_colors = rp.random_choice(
+            'random_of_7',
+            'random_of_26',
+            'random_of_64',
+        )
+
     if blob_colors == 'random_of_7':
         num_colors = rp.random_int(1,7)
         blob_colors = rp.random_batch(default_blob_colors, num_colors)
+
+    if blob_colors == 'random_of_26':
+        num_colors = rp.random_int(1,26)
+        blob_colors = rp.random_batch(col26, num_colors)
+
+    if blob_colors == 'random_of_64':
+        num_colors = rp.random_int(1,64)
+        blob_colors = rp.random_batch(get_all_bright_blob_colors(), num_colors)
 
     # Convert to tensor and get dimensions
     colors = torch.tensor(blob_colors, dtype=tracks.dtype)
