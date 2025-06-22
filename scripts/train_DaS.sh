@@ -1,18 +1,28 @@
 #!/bin/bash
 
-'
+<< "README"
 Ryan: Please run this from the PARENT of the scripts directory!
 !
 # cd ~/CleanCode/Github/DiffusionAsShader
 cd ~/CleanCode/Github/DaS_Trees/gauss_blobs
 
 bash ~/CleanCode/Management/sync_projects.bash
-
 INIT_CHECKPOINT_PATH="$HOME/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_RandomSpeed_WithDropout_2500_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-44200"
 INIT_CHECKPOINT_PATH="$HOME/CleanCode/Github/DiffusionAsShader/ckpts/your_ckpt_path/CounterChans_FIXED_DATASET_BetterAug_WithDropout_50kSamp_T2V_from_scratch_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-5500"
 INIT_CHECKPOINT_PATH="$HOME/CleanCode/Github/DaS_Trees/gauss_blobs/ckpts/your_ckpt_path/CounterChans_FIXED_DATASET_BetterAug_WithDropout_50kSamp_T2V_from_scratch_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-3500"
 INIT_CHECKPOINT_PATH="$HOME/CleanCode/Github/DaS_Trees/gauss_blobs/ckpts/your_ckpt_path/CounterChans_FIXED_DATASET_BetterAug_WithDropout_50kSamp_T2V_from_scratch_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-4500"
 INIT_CHECKPOINT_PATH="$HOME/CleanCode/Github/DaS_Trees/gauss_blobs/ckpts/your_ckpt_path/CounterChans_FIXED_DATASET_BetterAug_WithDropout_50kSamp_T2V_from_scratch_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-19000"
+INIT_CHECKPOINT_PATH="$HOME/CleanCode/Github/DaS_Trees/gauss_blobs/ckpts/your_ckpt_path/CounterChans_FIXED_DATASET_BetterAug_WithDropout_50kSamp_T2V_from_scratch_10000000__optimizer_adamw__lr-schedule_cosine_with_restarts__learning-rate_1e-4/checkpoint-20500"
+
+
+#UNCOMMENT TO USE MOST RECENT CHECKPOINT INSTEAD OF THE ABOVE
+CKPT_ROOT_ROOT='/home/jupyter/CleanCode/Github/DaS_Trees/gauss_blobs/ckpts/your_ckpt_path'
+CKPT_ROOT=$CKPT_ROOT_ROOT/"$(ls -t "$CKPT_ROOT_ROOT" | head -n 1)"
+CKPT=$CKPT_ROOT/"$(ls -t "$CKPT_ROOT" | head -n 1)"
+INIT_CHECKPOINT_PATH=$CKPT
+rp call fansi_print "'TRAINING FROM: $INIT_CHECKPOINT_PATH'" 'green green italic bold'
+
+
 python ~/CleanCode/Management/syncutil.py sync_checkpoint_folder $INIT_CHECKPOINT_PATH
 
 #Copy things from the original folder - these arent tracked by git
@@ -47,14 +57,14 @@ while True:
         fansi_print(f'Not syncing: {e}','orange')
         sleep(60*5)
         pass
+
     
 
 TO RUN TESTS:
     tmux setw synchronize-panes
     PYM source.run_pipeline
 
-
-'
+README
 
 ##########################
 ##### EXTRA SETTINGS #####
