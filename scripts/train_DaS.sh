@@ -198,6 +198,7 @@ for learning_rate in "${LEARNING_RATES[@]}"; do
           --max_grad_norm 1.0 \
           --allow_tf32 \
           --report_to wandb \
+          --resume_from_checkpoint \"latest\" \
           --nccl_timeout 1800"
           # --resume_from_checkpoint \"latest\" \
         
