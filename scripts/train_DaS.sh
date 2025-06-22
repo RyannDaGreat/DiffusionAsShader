@@ -32,14 +32,20 @@ TO SYNC CHECKPOINTS:
 
 while True:
     try:
+        fansi_print(format_current_date(),'green')
         sys.path.append('/home/jupyter/CleanCode/Management')
         import syncutil
-        most_recent_checkpoint = get_all_folders(get_all_folders('/home/jupyter/CleanCode/Github/DaS_Trees/gauss_blobs',sort_by='date')[-1],sort_by='date')[-1]
-        string_to_clipboard(most_recent_checkpoint)
+        latest_ckpt_folder = get_all_folders('/home/jupyter/CleanCode/Github/DaS_Trees/gauss_blobs/ckpts/your_ckpt_path',sort_by='date')[-1]
+        print(f'latest_ckpt_folder = {fansi_highlight_path(latest_ckpt_folder)}')
+        most_recent_checkpoint = get_all_folders(latest_ckpt_folder,sort_by='date')[-1]
+        print(f'most_recent_checkpoint = {fansi_highlight_path(most_recent_checkpoint)}')
+        #string_to_clipboard(most_recent_checkpoint)
         syncutil.sync_checkpoint_folder(most_recent_checkpoint)
-        print(fansi_highlight_path(most_recent_checkpoint))
+        print(f'SYNCED: most_recent_checkpoint = {fansi_highlight_path(most_recent_checkpoint)}')
         sleep(60*5)
-    except IndexError:
+    except IndexError as e:
+        fansi_print(f'Not syncing: {e}','orange')
+        sleep(60*5)
         pass
     
 
