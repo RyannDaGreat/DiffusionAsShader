@@ -822,7 +822,7 @@ def main(args):
                     counter_video_image_latents    = torch.zeros_like(counter_video_image_latents)
 
 
-                DO_TEMPORAL_DROPOUT=True #TODO: Make this an arg
+                DO_TEMPORAL_DROPOUT=False #TODO: Make this an arg
                 if DO_TEMPORAL_DROPOUT:
                     B, LT, LC, LH, LW = video_latents.shape
 
