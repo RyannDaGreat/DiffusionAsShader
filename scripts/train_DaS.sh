@@ -143,6 +143,7 @@ VALIDATION_IMAGES="$(pwd)/source/datasets/youtube/DaS/validation_samples/-mYvWIe
     MODEL_PATH="./diffusion_shader_model_start"
 
       RUN_NAME="CounterBlobs_WithSingleframe_ManyColors_"
+      RUN_NAME="CounterBlobs_SingleFrameONLY_ManyColors_"
 
 
 # Launch experiments with different hyperparameters

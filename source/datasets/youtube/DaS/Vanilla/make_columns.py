@@ -17,8 +17,8 @@ dataset = ProcessedYoutubeDataset()
 
 # Right now just using 1000 samples so I can test the code and make sure it runs
 # samples = rp.gather(dataset, range(25000))
-samples = rp.gather(dataset, range(30000))
-# samples = rp.gather(dataset, range(50000))
+# samples = rp.gather(dataset, range(30000))
+samples = rp.gather(dataset, range(50000))
 # samples = rp.gather(dataset, range(150000))
 # samples = rp.gather(dataset, range(300000)[-1000:])
 # samples = rp.gather(dataset, range(2500))

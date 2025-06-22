@@ -506,12 +506,11 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=Non
             return t,ct
 
         all_mask_modes = [
-            full,
-            counter_mask,
-            sync_mask,
+            # full,
+            # counter_mask,
+            # sync_mask,
             point_to_point,
-            point_to_point,
-            track_to_point,
+            # track_to_point,
         ]
 
         mask_modes = [rp.random_element(all_mask_modes) for _ in range(num_blobs)]
