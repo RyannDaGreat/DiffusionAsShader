@@ -535,8 +535,8 @@ def random_7_gaussians_video(tracks, counter_tracks, VH, VW, sigma=5.0, seed=Non
 
             rp.fansi_print_lines(
                 f"TRACK MASK {blob_index} {blob_colors_str} VIA {blob_mask_mode.__name__}",
-                f"    {''.join(str(int(v)) for v in selected_tracks        [:, blob_index, 3])}",
-                f"    {''.join(str(int(v)) for v in selected_counter_tracks[:, blob_index, 3])}",
+                # f"    {''.join(str(int(v)) for v in selected_tracks        [:, blob_index, 3])}",
+                # f"    {''.join(str(int(v)) for v in selected_counter_tracks[:, blob_index, 3])}",
                 style="orange bold italic",
             )
         

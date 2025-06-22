@@ -113,18 +113,18 @@ DATA_ROOT="/"
 
 
 OUTPUT_PATH="./ckpts/your_ckpt_path"
-CAPTION_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/prompt.txt"
-VIDEO_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/videos.txt"
-TRACKING_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/trackings.txt"
-COUNTER_TRACKING_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/counter_trackings.txt"
-COUNTER_VIDEO_COLUMN="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/Vanilla/counter_videos.txt"
+CAPTION_COLUMN="$(pwd)/source/datasets/youtube/DaS/Vanilla/prompt.txt"
+VIDEO_COLUMN="$(pwd)/source/datasets/youtube/DaS/Vanilla/videos.txt"
+TRACKING_COLUMN="$(pwd)/source/datasets/youtube/DaS/Vanilla/trackings.txt"
+COUNTER_TRACKING_COLUMN="$(pwd)/source/datasets/youtube/DaS/Vanilla/counter_trackings.txt"
+COUNTER_VIDEO_COLUMN="$(pwd)/source/datasets/youtube/DaS/Vanilla/counter_videos.txt"
 
 # validation parameters
-TRACKING_MAP_PATH="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/video.mp4__DiffusionAsShaderCondition/tracking_video.mp4"
-COUNTER_TRACKING_MAP_PATH="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/firstLastInterp_Jack2000.mp4__DiffusionAsShaderCondition/tracking_video.mp4"
-COUNTER_VIDEO_MAP_PATH="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/firstLastInterp_Jack2000.mp4"
+TRACKING_MAP_PATH="$(pwd)/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/video.mp4__DiffusionAsShaderCondition/tracking_video.mp4"
+COUNTER_TRACKING_MAP_PATH="$(pwd)/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/firstLastInterp_Jack2000.mp4__DiffusionAsShaderCondition/tracking_video.mp4"
+COUNTER_VIDEO_MAP_PATH="$(pwd)/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/firstLastInterp_Jack2000.mp4"
 VALIDATION_PROMPT="A soccer player from Hertha BSC is in the field with the ball while an opposing player is running towards him."
-VALIDATION_IMAGES="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/video_firstFrame.png"
+VALIDATION_IMAGES="$(pwd)/source/datasets/youtube/DaS/validation_samples/-mYvWIeIEHE_268812917_274856884/video_firstFrame.png"
 
 #VARIANTS TREE
   #DOING IT FROM SCRATCH 
@@ -142,6 +142,7 @@ VALIDATION_IMAGES="$HOME/CleanCode/Github/DiffusionAsShader/source/datasets/yout
 
     MODEL_PATH="./diffusion_shader_model_start"
 
+      RUN_NAME="CounterBlobs_WithSingleframe_ManyColors_"
 
 
 # Launch experiments with different hyperparameters
@@ -196,8 +197,8 @@ for learning_rate in "${LEARNING_RATES[@]}"; do
           --max_grad_norm 1.0 \
           --allow_tf32 \
           --report_to wandb \
-          --resume_from_checkpoint \"latest\" \
           --nccl_timeout 1800"
+          # --resume_from_checkpoint \"latest\" \
         
         echo "Running command: $cmd"
         eval $cmd
